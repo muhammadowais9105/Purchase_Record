@@ -1,141 +1,123 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
-from streamlit_sortable import sortable_list  # pip install streamlit-sortable
 
-# --------------------------------------------------
-# Page Config
-# --------------------------------------------------
-st.set_page_config(page_title="Electronic Shop POS", page_icon="🛒")
+# --- Page Configuration ---
+st.set_page_config(page_title="ShopMaster: Electronic Store", page_icon="⚡", layout="wide")
 
-# --------------------------------------------------
-# Shop Info
-# --------------------------------------------------
-shop_name = "Electronic Shop"
-shop_city = "Karachi"
-shop_open = True
-
-st.title(f"🏪 {shop_name}")
-st.subheader(f"📍 Location: {shop_city}")
-
-# --------------------------------------------------
-# Customer Details
-# --------------------------------------------------
-st.subheader("👤 Customer Details")
-customer_name = st.text_input("Enter customer name")
-
-payment_method = st.selectbox(
-    "Payment Method",
-    ["Cash", "Credit Card", "Debit Card", "JazzCash", "EasyPaisa"]
-)
-
-# --------------------------------------------------
-# Products with Price
-# --------------------------------------------------
-products = {
-    "Laptop": 85000, "Mobile": 35000, "TV": 50000,
-    "Headphones": 2000, "Keyboard": 1200, "Mouse": 700,
-    "Fan": 4000, "Iron": 2500, "Speaker": 3000,
-    "Charger": 900, "Camera": 60000, "Washing Machine": 55000
-}
-
-st.divider()
-st.subheader("🛒 Drag & Drop Products in the Order You Want")
-
-# Drag-and-drop sortable list
-selected_items = sortable_list(list(products.keys()), direction="vertical")
-
-# Quantity selection
-purchases = {}
-if selected_items:
-    for item in selected_items:
-        qty = st.number_input(f"Quantity for {item}:", min_value=1, value=1, key=item)
-        purchases[item] = qty
-
-# --------------------------------------------------
-# Save Transaction
-# --------------------------------------------------
-def save_transaction(customer, payment, bill_df):
-    file_name = "transactions.csv"
-    date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    bill_df = bill_df.copy()
-    bill_df["Date"] = date_time
-    bill_df["Customer"] = customer
-    bill_df["Payment Method"] = payment
-
-    bill_df = bill_df[
-        ["Date", "Customer", "Product", "Quantity", "Unit Price", "Total", "Payment Method"]
-    ]
-
-    if os.path.exists(file_name):
-        bill_df.to_csv(file_name, mode="a", header=False, index=False)
-    else:
-        bill_df.to_csv(file_name, index=False)
-
-# --------------------------------------------------
-# Billing Function with Styled Invoice
-# --------------------------------------------------
-def show_bill(pur_dict):
-    total = 0
-    bill_data = []
-
-    st.markdown("""
-    <style>
-    .bill-box {
-        border: 2px solid #4CAF50;
-        border-radius: 15px;
-        padding: 20px;
-        background-color: #f9f9f9;
-        box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
-        color: #333;
+# --- Initialize Session State (Data Storage) ---
+if 'inventory' not in st.session_state:
+    # Default products from your first code
+    default_data = {
+        "Item": ["Laptop", "Mobile", "TV", "Headphones", "Keyboard"],
+        "Price": [85000, 35000, 50000, 2000, 1200],
+        "Stock": [10, 20, 15, 50, 40]
     }
-    </style>
-    """, unsafe_allow_html=True)
+    st.session_state['inventory'] = pd.DataFrame(default_data)
 
-    st.markdown('<div class="bill-box">', unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align: center; color: #4CAF50;'>🧾 OFFICIAL INVOICE</h2>", unsafe_allow_html=True)
-    st.write(f"**Shop:** {shop_name} | **City:** {shop_city}")
-    st.divider()
+if 'sales_history' not in st.session_state:
+    st.session_state['sales_history'] = []
 
-    for item, qty in pur_dict.items():
-        price = products[item]
-        cost = price * qty
-        total += cost
-        bill_data.append([item, qty, price, cost])
-        st.write(f"🔹 {item} (x{qty}) : **Rs {cost:,}**")
+# --- Header Section ---
+st.title("🏪 Electronic Shop: Management System")
+st.markdown("Manage your stock and generate professional bills with automatic discounts.")
 
-    st.divider()
+# --- Tabs for Organization ---
+tab1, tab2, tab3 = st.tabs(["🛒 Point of Sale", "📦 Inventory Manager", "📊 Sales Report"])
 
-    discount = total * 0.10 if total > 50000 else 0
-    final_amount = total - discount
+# --- Tab 1: Billing System (Point of Sale) ---
+with tab1:
+    st.subheader("Create New Bill")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        customer_name = st.text_input("Customer Name", placeholder="Enter name here...")
+        available_items = st.session_state.inventory[st.session_state.inventory["Stock"] > 0]["Item"].tolist()
+        selected_items = st.multiselect("Select Products to Buy:", available_items)
 
-    st.write(f"**Subtotal:** Rs {total:,}")
-    st.write(f"**Discount:** Rs {discount:,}")
-    st.success(f"💰 Final Amount: Rs {final_amount:,}")
-    st.markdown("</div>", unsafe_allow_html=True)
+    purchases = []
+    total_bill = 0
 
-    df = pd.DataFrame(bill_data, columns=["Product", "Quantity", "Unit Price", "Total"])
-    return df
+    if selected_items:
+        st.write("---")
+        for item in selected_items:
+            # Get item details
+            item_row = st.session_state.inventory[st.session_state.inventory["Item"] == item].iloc[0]
+            max_stock = int(item_row["Stock"])
+            unit_price = int(item_row["Price"])
+            
+            # Quantity Input
+            qty = st.number_input(f"Quantity for {item} (Available: {max_stock})", min_value=1, max_value=max_stock, key=f"qty_{item}")
+            
+            subtotal = qty * unit_price
+            total_bill += subtotal
+            purchases.append({"Item": item, "Qty": qty, "Price": unit_price, "Subtotal": subtotal})
 
-# --------------------------------------------------
-# Generate Bill Button
-# --------------------------------------------------
-if shop_open:
-    if st.button("🧾 Generate Invoice"):
-        if not customer_name:
-            st.warning("Please enter customer name")
-        elif not purchases:
-            st.warning("Please select at least one product")
-        else:
-            bill_df = show_bill(purchases)
-            save_transaction(customer_name, payment_method, bill_df)
-            # Download receipt
-            csv = bill_df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "📥 Download Receipt",
-                csv,
-                f"{customer_name}_receipt.csv",
-                "text/csv"
-            )
+        st.divider()
+        
+        # --- Discount Logic ---
+        final_amount = total_bill
+        discount_applied = 0
+        
+        if total_bill > 50000:
+            discount_applied = total_bill * 0.10
+            final_amount = total_bill - discount_applied
+            st.info(f"🎉 10% Discount Applied: -Rs {discount_applied}")
+        
+        st.subheader(f"Total Amount: Rs {final_amount}")
+
+        if st.button("Confirm Purchase & Print Bill"):
+            # Update Inventory Stock
+            for p in purchases:
+                idx = st.session_state.inventory.index[st.session_state.inventory["Item"] == p["Item"]][0]
+                st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
+            
+            # Record Sale
+            st.session_state.sales_history.append({
+                "Customer": customer_name,
+                "Total Items": len(purchases),
+                "Bill Amount": final_amount
+            })
+            
+            st.success(f"Bill Generated for {customer_name}! Stock updated.")
+            st.balloons()
+
+# --- Tab 2: Inventory Management ---
+with tab2:
+    st.subheader("Manage Product Stock")
+    
+    # Add New Product Form
+    with st.expander("➕ Add New Product to Shop"):
+        new_col1, new_col2, new_col3 = st.columns(3)
+        with new_col1: new_name = st.text_input("Product Name")
+        with new_col2: new_price = st.number_input("Selling Price", min_value=0)
+        with new_col3: new_stock = st.number_input("Initial Stock", min_value=0)
+        
+        if st.button("Update Inventory List"):
+            if new_name:
+                new_row = pd.DataFrame([[new_name, new_price, new_stock]], columns=["Item", "Price", "Stock"])
+                st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
+                st.rerun()
+
+    st.write("### Current Stock Status")
+    st.dataframe(st.session_state.inventory, use_container_width=True)
+
+# --- Tab 3: Sales Reports ---
+with tab3:
+    st.subheader("Performance & Sales History")
+    
+    if st.session_state.sales_history:
+        sales_df = pd.DataFrame(st.session_state.sales_history)
+        
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Total Sales Count", len(sales_df))
+        col_m2.metric("Total Revenue", f"Rs {sales_df['Bill Amount'].sum():,.2f}")
+        
+        st.write("### Recent Transactions")
+        st.table(sales_df)
+    else:
+        st.warning("No sales recorded yet.")
+
+# --- Footer ---
+st.markdown("---")
+st.caption("Electronic Shop Management System | Built with Streamlit")
