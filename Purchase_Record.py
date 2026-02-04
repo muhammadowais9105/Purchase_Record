@@ -26,7 +26,6 @@ if "invoice" not in st.session_state:
 if "invoice_no" not in st.session_state:
     st.session_state.invoice_no = 1000
 
-# NEW: Shop Logo
 if "shop_logo" not in st.session_state:
     st.session_state.shop_logo = None
 
@@ -44,18 +43,13 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ================= TAB 4 : SHOP SETTINGS =================
 with tab4:
     st.subheader("Upload Shop Logo")
-
-    logo = st.file_uploader(
-        "Upload Shop Logo (PNG / JPG)",
-        type=["png", "jpg", "jpeg"]
-    )
-
+    logo = st.file_uploader("Upload Shop Logo", type=["png", "jpg", "jpeg"])
     if logo:
         st.session_state.shop_logo = logo
-        st.success("Logo uploaded successfully ✅")
+        st.success("Logo uploaded successfully")
 
     if st.session_state.shop_logo:
-        st.image(st.session_state.shop_logo, width=200, caption="Current Shop Logo")
+        st.image(st.session_state.shop_logo, width=200)
 
 # ================= TAB 1 : POS =================
 with tab1:
@@ -69,7 +63,7 @@ with tab1:
 
     selected_items = st.multiselect("Select Products", items_available)
 
-    subtotal_amount = 0
+    subtotal = 0
     purchases = []
 
     for item in selected_items:
@@ -85,104 +79,100 @@ with tab1:
         )
 
         total = qty * row["Price"]
-        subtotal_amount += total
+        subtotal += total
 
         purchases.append({
-            "Item": item,
+            "Product": item,
             "Qty": qty,
             "Price": row["Price"],
             "Total": total
         })
 
-    if subtotal_amount > 0:
+    if subtotal > 0:
         discount = 0
-        if subtotal_amount > 50000:
-            discount = subtotal_amount * 0.10
-            st.info(f"🎉 10% Discount: Rs {discount:,.0f}")
+        if subtotal > 50000:
+            discount = subtotal * 0.10
+            st.info(f"10% Discount Applied: Rs {discount:,.0f}")
 
-        after_discount = subtotal_amount - discount
-        gst_rate = 0.05
-        gst_amount = after_discount * gst_rate
-        grand_total = after_discount + gst_amount
+        after_discount = subtotal - discount
+        gst = after_discount * 0.05
+        grand_total = after_discount + gst
 
         st.subheader(f"Grand Total: Rs {grand_total:,.0f}")
 
         if st.button("Confirm Purchase"):
             for p in purchases:
                 idx = st.session_state.inventory.index[
-                    st.session_state.inventory["Item"] == p["Item"]
+                    st.session_state.inventory["Item"] == p["Product"]
                 ][0]
                 st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
 
             st.session_state.invoice_no += 1
-            invoice_number = f"INV-{st.session_state.invoice_no}"
+            inv_no = f"INV-{st.session_state.invoice_no}"
 
             st.session_state.sales_history.append({
-                "Invoice No": invoice_number,
+                "Invoice": inv_no,
                 "Customer": customer,
                 "Amount": grand_total
             })
 
             st.session_state.invoice = {
-                "Invoice No": invoice_number,
+                "Invoice": inv_no,
                 "Customer": customer,
-                "Date": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
                 "Items": purchases,
-                "Sub Total": subtotal_amount,
+                "SubTotal": subtotal,
                 "Discount": discount,
-                "GST": gst_amount,
-                "Grand Total": grand_total
+                "GST": gst,
+                "NetTotal": grand_total
             }
 
-            st.success("Invoice Generated Successfully 🧾")
+            st.success("Invoice Generated Successfully")
             st.balloons()
 
-    # ================= SHOW BIG INVOICE =================
+    # ================= RECEIPT STYLE INVOICE =================
     if st.session_state.invoice:
         inv = st.session_state.invoice
+        st.markdown("---")
+
+        st.markdown("### 🧾 RECEIPT")
+        if st.session_state.shop_logo:
+            st.image(st.session_state.shop_logo, width=100)
+
+        st.markdown("**Electronic Shop**  \nMain Market, Karachi")
+        st.markdown("---")
+
+        c1, c2 = st.columns(2)
+        c1.write(f"Invoice #: {inv['Invoice']}")
+        c1.write("Cashier: 001")
+        c2.write(f"Date: {inv['Date']}")
+        c2.write(f"Customer: {inv['Customer']}")
 
         st.markdown("---")
 
-        # Logo + Invoice Title
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            if st.session_state.shop_logo:
-                st.image(st.session_state.shop_logo, width=120)
-        with col2:
-            st.markdown("## 🧾 **INVOICE**")
-            st.write("**Electronic Shop**")
-            st.write("Main Market, Karachi")
-            st.write("Phone: 0300-1234567")
+        receipt_df = pd.DataFrame(inv["Items"])
+        st.table(receipt_df)
 
         st.markdown("---")
-
-        colA, colB = st.columns(2)
-        colA.write(f"**Invoice No:** {inv['Invoice No']}")
-        colA.write(f"**Customer:** {inv['Customer']}")
-        colB.write(f"**Date:** {inv['Date']}")
-        colB.write("**Payment:** Cash")
-
-        st.markdown("### 🛒 Purchased Items")
-        st.table(pd.DataFrame(inv["Items"]))
-
-        st.markdown("---")
-        st.write(f"**Sub Total:** Rs {inv['Sub Total']:,.0f}")
-        st.write(f"**Discount:** Rs {inv['Discount']:,.0f}")
-        st.write(f"**GST (5%):** Rs {inv['GST']:,.0f}")
+        st.write(f"Items Sold: {len(inv['Items'])}")
+        st.write(f"Sub Total: Rs {inv['SubTotal']:,.0f}")
+        st.write(f"Discount: Rs {inv['Discount']:,.0f}")
+        st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
 
         st.markdown(
-            f"## 💰 **GRAND TOTAL: Rs {inv['Grand Total']:,.0f}**"
+            f"### 💰 NET TOTAL (RECEIVED): Rs {inv['NetTotal']:,.0f}"
         )
 
         st.markdown("---")
-        st.markdown("### 🙏 Thank you for shopping with us!")
-        st.markdown("**Goods once sold will not be returned**")
+        st.write("Payment Method: Cash")
+        st.write("Thank you for shopping with us")
+        st.write("Goods once sold will not be returned")
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
     st.subheader("Inventory Manager")
 
-    with st.expander("➕ Add New Product"):
+    with st.expander("Add New Product"):
         name = st.text_input("Product Name")
         price = st.number_input("Price", min_value=0)
         stock = st.number_input("Stock", min_value=0)
@@ -206,13 +196,13 @@ with tab3:
 
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "⬇️ Download Sales Report",
+            "Download CSV",
             csv,
             "sales_report.csv",
             "text/csv"
         )
     else:
-        st.info("No sales data available")
+        st.info("No sales data yet")
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
