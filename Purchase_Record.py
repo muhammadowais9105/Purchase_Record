@@ -26,15 +26,36 @@ if "invoice" not in st.session_state:
 if "invoice_no" not in st.session_state:
     st.session_state.invoice_no = 1000
 
+# NEW: Shop Logo
+if "shop_logo" not in st.session_state:
+    st.session_state.shop_logo = None
+
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
 st.markdown("Manage your stock and generate professional bills with automatic discounts.")
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🛒 Point of Sale",
     "📦 Inventory Manager",
-    "📊 Sales Report"
+    "📊 Sales Report",
+    "🏷️ Shop Settings"
 ])
+
+# ================= TAB 4 : SHOP SETTINGS =================
+with tab4:
+    st.subheader("Upload Shop Logo")
+
+    logo = st.file_uploader(
+        "Upload Shop Logo (PNG / JPG)",
+        type=["png", "jpg", "jpeg"]
+    )
+
+    if logo:
+        st.session_state.shop_logo = logo
+        st.success("Logo uploaded successfully ✅")
+
+    if st.session_state.shop_logo:
+        st.image(st.session_state.shop_logo, width=200, caption="Current Shop Logo")
 
 # ================= TAB 1 : POS =================
 with tab1:
@@ -80,7 +101,6 @@ with tab1:
             st.info(f"🎉 10% Discount: Rs {discount:,.0f}")
 
         after_discount = subtotal_amount - discount
-
         gst_rate = 0.05
         gst_amount = after_discount * gst_rate
         grand_total = after_discount + gst_amount
@@ -122,20 +142,25 @@ with tab1:
         inv = st.session_state.invoice
 
         st.markdown("---")
-        st.markdown("## 🧾 **INVOICE**")
 
-        # Shop Details
-        st.markdown("""
-        **Electronic Shop**  
-        Main Market, Karachi  
-        Phone: 0300-1234567  
-        """)
+        # Logo + Invoice Title
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.session_state.shop_logo:
+                st.image(st.session_state.shop_logo, width=120)
+        with col2:
+            st.markdown("## 🧾 **INVOICE**")
+            st.write("**Electronic Shop**")
+            st.write("Main Market, Karachi")
+            st.write("Phone: 0300-1234567")
 
-        col1, col2 = st.columns(2)
-        col1.write(f"**Invoice No:** {inv['Invoice No']}")
-        col1.write(f"**Customer:** {inv['Customer']}")
-        col2.write(f"**Date:** {inv['Date']}")
-        col2.write("**Payment:** Cash")
+        st.markdown("---")
+
+        colA, colB = st.columns(2)
+        colA.write(f"**Invoice No:** {inv['Invoice No']}")
+        colA.write(f"**Customer:** {inv['Customer']}")
+        colB.write(f"**Date:** {inv['Date']}")
+        colB.write("**Payment:** Cash")
 
         st.markdown("### 🛒 Purchased Items")
         st.table(pd.DataFrame(inv["Items"]))
