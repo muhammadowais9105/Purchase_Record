@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-import io
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -20,125 +17,218 @@ if "inventory" not in st.session_state:
         "Stock": [10, 20, 15, 50, 40]
     })
 
+if "sales_history" not in st.session_state:
+    st.session_state.sales_history = []
+
 if "invoice" not in st.session_state:
     st.session_state.invoice = None
 
 if "invoice_no" not in st.session_state:
     st.session_state.invoice_no = 1000
 
+if "shop_logo" not in st.session_state:
+    st.session_state.shop_logo = None
+
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
+st.markdown("Manage your stock and generate professional bills with automatic discounts.")
 
-# ================= POS =================
-customer = st.text_input("Customer Name")
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🛒 Point of Sale",
+    "📦 Inventory Manager",
+    "📊 Sales Report",
+    "🏷️ Shop Settings"
+])
 
-items = st.session_state.inventory["Item"].tolist()
-selected = st.multiselect("Select Products", items)
+# ================= TAB 4 : SHOP SETTINGS =================
+with tab4:
+    st.subheader("Upload Shop Logo")
+    logo = st.file_uploader("Upload Shop Logo", type=["png", "jpg", "jpeg"])
+    if logo:
+        st.session_state.shop_logo = logo
+        st.success("Logo uploaded successfully")
 
-subtotal = 0
-purchases = []
+    if st.session_state.shop_logo:
+        st.image(st.session_state.shop_logo, width=200)
 
-for item in selected:
-    row = st.session_state.inventory[
-        st.session_state.inventory["Item"] == item
-    ].iloc[0]
+# ================= TAB 1 : POS =================
+with tab1:
+    st.subheader("Create New Bill")
 
-    qty = st.number_input(
-        f"Qty for {item}", 1, int(row["Stock"]), key=item
-    )
+    customer = st.text_input("Customer Name")
 
-    total = qty * row["Price"]
-    subtotal += total
+    items_available = st.session_state.inventory[
+        st.session_state.inventory["Stock"] > 0
+    ]["Item"].tolist()
 
-    purchases.append({
-        "Product": item,
-        "Qty": qty,
-        "Price": row["Price"],
-        "Total": total
-    })
+    selected_items = st.multiselect("Select Products", items_available)
 
-if subtotal > 0:
-    discount = subtotal * 0.10 if subtotal > 50000 else 0
-    gst = (subtotal - discount) * 0.05
-    grand = subtotal - discount + gst
+    subtotal = 0
+    purchases = []
 
-    if st.button("Confirm Purchase"):
-        st.session_state.invoice_no += 1
-        st.session_state.invoice = {
-            "Invoice": f"INV-{st.session_state.invoice_no}",
-            "Customer": customer,
-            "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
-            "Items": purchases,
-            "SubTotal": subtotal,
-            "Discount": discount,
-            "GST": gst,
-            "NetTotal": grand
-        }
+    for item in selected_items:
+        row = st.session_state.inventory[
+            st.session_state.inventory["Item"] == item
+        ].iloc[0]
 
-# ================= RECEIPT + AUTO PDF =================
-if st.session_state.invoice:
-    inv = st.session_state.invoice
+        qty = st.number_input(
+            f"Quantity for {item}",
+            min_value=1,
+            max_value=int(row["Stock"]),
+            key=item
+        )
 
-    st.markdown("### 🧾 RECEIPT")
-    st.table(pd.DataFrame(inv["Items"]))
-    st.markdown(f"### 💰 Net Total: Rs {inv['NetTotal']:,.0f}")
+        total = qty * row["Price"]
+        subtotal += total
 
-    # -------- PDF GENERATION --------
-    def generate_pdf(invoice):
-        buffer = io.BytesIO()
-        c = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
+        purchases.append({
+            "Product": item,
+            "Qty": qty,
+            "Price": row["Price"],
+            "Total": total
+        })
 
-        y = height - 50
-        c.setFont("Helvetica-Bold", 14)
-        c.drawCentredString(width / 2, y, "ELECTRONIC SHOP RECEIPT")
+    if subtotal > 0:
+        discount = 0
+        if subtotal > 50000:
+            discount = subtotal * 0.10
+            st.info(f"10% Discount Applied: Rs {discount:,.0f}")
 
-        y -= 30
-        c.setFont("Helvetica", 10)
-        c.drawString(50, y, f"Invoice #: {invoice['Invoice']}")
-        y -= 15
-        c.drawString(50, y, f"Customer: {invoice['Customer']}")
-        y -= 15
-        c.drawString(50, y, f"Date: {invoice['Date']}")
+        after_discount = subtotal - discount
+        gst = after_discount * 0.05
+        grand_total = after_discount + gst
 
-        y -= 30
-        c.drawString(50, y, "Item")
-        c.drawString(200, y, "Qty")
-        c.drawString(250, y, "Price")
-        c.drawString(330, y, "Total")
+        st.subheader(f"Grand Total: Rs {grand_total:,.0f}")
 
-        y -= 10
-        c.line(50, y, 550, y)
+        if st.button("Confirm Purchase"):
+            for p in purchases:
+                idx = st.session_state.inventory.index[
+                    st.session_state.inventory["Item"] == p["Product"]
+                ][0]
+                st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
 
-        for item in invoice["Items"]:
-            y -= 20
-            c.drawString(50, y, item["Product"])
-            c.drawString(200, y, str(item["Qty"]))
-            c.drawString(250, y, str(item["Price"]))
-            c.drawString(330, y, str(item["Total"]))
+            st.session_state.invoice_no += 1
+            inv_no = f"INV-{st.session_state.invoice_no}"
 
-        y -= 30
-        c.drawString(50, y, f"Subtotal: Rs {invoice['SubTotal']:,.0f}")
-        y -= 15
-        c.drawString(50, y, f"Discount: Rs {invoice['Discount']:,.0f}")
-        y -= 15
-        c.drawString(50, y, f"GST: Rs {invoice['GST']:,.0f}")
-        y -= 20
+            st.session_state.sales_history.append({
+                "Invoice": inv_no,
+                "Customer": customer,
+                "Amount": grand_total
+            })
 
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y, f"NET TOTAL: Rs {invoice['NetTotal']:,.0f}")
+            st.session_state.invoice = {
+                "Invoice": inv_no,
+                "Customer": customer,
+                "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
+                "Items": purchases,
+                "SubTotal": subtotal,
+                "Discount": discount,
+                "GST": gst,
+                "NetTotal": grand_total
+            }
 
-        c.showPage()
-        c.save()
-        buffer.seek(0)
-        return buffer
+            st.success("Invoice Generated Successfully")
+            st.balloons()
 
-    pdf_file = generate_pdf(inv)
+    # ================= RESPONSIVE CENTER INVOICE =================
+    if st.session_state.invoice:
+        inv = st.session_state.invoice
 
-    # -------- DOWNLOAD BUTTON --------
-    st.download_button(
-        label="🖨️ Print Receipt (Download PDF)",
-        data=pdf_file,
-        file_name=f"{inv['Invoice']}.pdf",
-        mime="application/pdf"
-    )
+        # RESPONSIVE CSS (Desktop + Mobile)
+        st.markdown(
+            """
+            <style>
+            .invoice-wrapper {
+                display: flex;
+                justify-content: center;
+                width: 100%;
+            }
+            .invoice-box {
+                width: 100%;
+                max-width: 380px;
+                padding: 15px;
+                border: 1px dashed #777;
+                font-family: monospace;
+                text-align: center;
+            }
+            @media (max-width: 600px) {
+                .invoice-box {
+                    max-width: 95%;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown('<div class="invoice-wrapper"><div class="invoice-box">', unsafe_allow_html=True)
+
+        if st.session_state.shop_logo:
+            st.image(st.session_state.shop_logo, width=90)
+
+        st.markdown("### 🧾 RECEIPT")
+        st.markdown("**Electronic Shop**  \nMain Market, Karachi")
+        st.markdown("---")
+
+        st.write(f"Invoice #: {inv['Invoice']}")
+        st.write(f"Date: {inv['Date']}")
+        st.write(f"Customer: {inv['Customer']}")
+        st.write("Payment: Cash")
+
+        st.markdown("---")
+
+        st.table(pd.DataFrame(inv["Items"]))
+
+        st.markdown("---")
+        st.write(f"Items Sold: {len(inv['Items'])}")
+        st.write(f"Sub Total: Rs {inv['SubTotal']:,.0f}")
+        st.write(f"Discount: Rs {inv['Discount']:,.0f}")
+        st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
+
+        st.markdown(f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}")
+
+        st.markdown("---")
+        st.write("Thank you for shopping with us")
+        st.write("Goods once sold will not be returned")
+
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
+# ================= TAB 2 : INVENTORY =================
+with tab2:
+    st.subheader("Inventory Manager")
+
+    with st.expander("Add New Product"):
+        name = st.text_input("Product Name")
+        price = st.number_input("Price", min_value=0)
+        stock = st.number_input("Stock", min_value=0)
+
+        if st.button("Add Product"):
+            if name:
+                st.session_state.inventory.loc[len(st.session_state.inventory)] = [
+                    name, price, stock
+                ]
+                st.rerun()
+
+    st.dataframe(st.session_state.inventory, use_container_width=True)
+
+# ================= TAB 3 : SALES REPORT =================
+with tab3:
+    st.subheader("Sales Report")
+
+    if st.session_state.sales_history:
+        df = pd.DataFrame(st.session_state.sales_history)
+        st.table(df)
+
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download CSV",
+            csv,
+            "sales_report.csv",
+            "text/csv"
+        )
+    else:
+        st.info("No sales data yet")
+
+# ---------------- FOOTER ----------------
+st.markdown("---")
+st.caption("Electronic Shop Management System | Streamlit App")
