@@ -130,11 +130,11 @@ with tab1:
             st.success("Invoice Generated Successfully")
             st.balloons()
 
-    # ================= RESPONSIVE CENTER INVOICE =================
+    # ================= CENTER + PRINT RECEIPT =================
     if st.session_state.invoice:
         inv = st.session_state.invoice
 
-        # RESPONSIVE CSS (Desktop + Mobile)
+        # CSS (Responsive + Print)
         st.markdown(
             """
             <style>
@@ -147,13 +147,22 @@ with tab1:
                 width: 100%;
                 max-width: 380px;
                 padding: 15px;
-                border: 1px dashed #777;
+                border: 1px dashed #555;
                 font-family: monospace;
                 text-align: center;
             }
-            @media (max-width: 600px) {
+            @media print {
+                body * {
+                    visibility: hidden;
+                }
+                .invoice-box, .invoice-box * {
+                    visibility: visible;
+                }
                 .invoice-box {
-                    max-width: 95%;
+                    position: absolute;
+                    left: 50%;
+                    top: 0;
+                    transform: translateX(-50%);
                 }
             }
             </style>
@@ -176,11 +185,9 @@ with tab1:
         st.write("Payment: Cash")
 
         st.markdown("---")
-
         st.table(pd.DataFrame(inv["Items"]))
 
         st.markdown("---")
-        st.write(f"Items Sold: {len(inv['Items'])}")
         st.write(f"Sub Total: Rs {inv['SubTotal']:,.0f}")
         st.write(f"Discount: Rs {inv['Discount']:,.0f}")
         st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
@@ -190,6 +197,24 @@ with tab1:
         st.markdown("---")
         st.write("Thank you for shopping with us")
         st.write("Goods once sold will not be returned")
+
+        # PRINT BUTTON
+        st.markdown(
+            """
+            <br>
+            <button onclick="window.print()" style="
+                padding:10px 18px;
+                font-size:16px;
+                border:none;
+                background:#0d6efd;
+                color:white;
+                border-radius:5px;
+                cursor:pointer;">
+                🖨️ Print Receipt
+            </button>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.markdown("</div></div>", unsafe_allow_html=True)
 
@@ -220,12 +245,7 @@ with tab3:
         st.table(df)
 
         csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Download CSV",
-            csv,
-            "sales_report.csv",
-            "text/csv"
-        )
+        st.download_button("Download CSV", csv, "sales_report.csv")
     else:
         st.info("No sales data yet")
 
