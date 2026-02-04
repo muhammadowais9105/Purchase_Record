@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
+import os
 
 # --- Page Config ---
 st.set_page_config(page_title="Electronic Shop", page_icon="🛒")
@@ -33,6 +35,7 @@ products = {
     "Iron": {"price": 2500, "stock": 6},
 }
 
+# --- Product Selection ---
 st.divider()
 st.subheader("🛍️ Select Products")
 
@@ -41,15 +44,32 @@ purchases = {}
 
 if selected_items:
     for item in selected_items:
-        max_qty = products[item]["stock"]
         qty = st.number_input(
-            f"{item} (Stock: {max_qty})",
+            f"{item} (Stock: {products[item]['stock']})",
             min_value=1,
-            max_value=max_qty,
+            max_value=products[item]["stock"],
             value=1,
             key=item
         )
         purchases[item] = qty
+
+
+# --- Save Sale Function ---
+def save_sale(customer, payment, amount):
+    file_name = "sales_data.csv"
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    df = pd.DataFrame({
+        "Date": [today],
+        "Customer": [customer],
+        "Payment Method": [payment],
+        "Amount": [amount]
+    })
+
+    if os.path.exists(file_name):
+        df.to_csv(file_name, mode="a", header=False, index=False)
+    else:
+        df.to_csv(file_name, index=False)
 
 
 # --- Billing Function ---
@@ -71,12 +91,7 @@ def show_bill(pur_dict):
     st.subheader("🧾 Order Summary")
     st.table(df)
 
-    # --- Discount ---
-    if total > 50000:
-        discount = total * 0.10
-    else:
-        discount = 0
-
+    discount = total * 0.10 if total > 50000 else 0
     final_amount = total - discount
 
     st.divider()
@@ -85,7 +100,10 @@ def show_bill(pur_dict):
     st.success(f"💰 Final Amount: Rs {final_amount}")
     st.info(f"💳 Payment Method: {payment_method}")
 
-    # --- Receipt Download ---
+    # Save sale for reports
+    save_sale(customer_name, payment_method, final_amount)
+
+    # Receipt Download
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
         "📥 Download Receipt",
@@ -104,3 +122,57 @@ if shop_open:
             st.warning("Please select at least one product")
         else:
             show_bill(purchases)
+
+
+# ===================== REPORTS SECTION =====================
+
+st.divider()
+st.header("📊 Sales Reports & Analytics")
+
+if os.path.exists("sales_data.csv"):
+    sales_df = pd.read_csv("sales_data.csv")
+    sales_df["Date"] = pd.to_datetime(sales_df["Date"])
+
+    report_type = st.selectbox(
+        "Select Report Type",
+        ["Monthly Report", "Yearly Report"]
+    )
+
+    if report_type == "Monthly Report":
+        sales_df["Month"] = sales_df["Date"].dt.to_period("M")
+        monthly = sales_df.groupby("Month")["Amount"].sum().reset_index()
+
+        st.subheader("📅 Monthly Sales Report")
+        st.dataframe(monthly)
+
+        st.bar_chart(monthly.set_index("Month"))
+
+        st.success(f"💰 Total Monthly Sales: Rs {monthly['Amount'].sum()}")
+
+        st.download_button(
+            "📥 Download Monthly Report",
+            monthly.to_csv(index=False).encode("utf-8"),
+            "monthly_sales_report.csv",
+            "text/csv"
+        )
+
+    else:
+        sales_df["Year"] = sales_df["Date"].dt.year
+        yearly = sales_df.groupby("Year")["Amount"].sum().reset_index()
+
+        st.subheader("📆 Yearly Sales Report")
+        st.dataframe(yearly)
+
+        st.line_chart(yearly.set_index("Year"))
+
+        st.success(f"💰 Total Yearly Sales: Rs {yearly['Amount'].sum()}")
+
+        st.download_button(
+            "📥 Download Yearly Report",
+            yearly.to_csv(index=False).encode("utf-8"),
+            "yearly_sales_report.csv",
+            "text/csv"
+        )
+
+else:
+    st.info("No sales data available yet. Generate a bill first.")
