@@ -1,123 +1,67 @@
 import streamlit as st
-import pandas as pd
 
-# --- Page Configuration ---
-st.set_page_config(page_title="ShopMaster: Electronic Store", page_icon="⚡", layout="wide")
+# --- Page Config ---
+st.set_page_config(page_title="Electronic Shop", page_icon="🛒")
 
-# --- Initialize Session State (Data Storage) ---
-if 'inventory' not in st.session_state:
-    # Default products from your first code
-    default_data = {
-        "Item": ["Laptop", "Mobile", "TV", "Headphones", "Keyboard"],
-        "Price": [85000, 35000, 50000, 2000, 1200],
-        "Stock": [10, 20, 15, 50, 40]
+# Custom CSS for the "Beautiful Box"
+st.markdown("""
+    <style>
+    .bill-box {
+        border: 2px solid #4CAF50;
+        border-radius: 15px;
+        padding: 20px;
+        background-color: #f9f9f9;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+        color: #333;
     }
-    st.session_state['inventory'] = pd.DataFrame(default_data)
+    </style>
+    """, unsafe_allow_html=True)
 
-if 'sales_history' not in st.session_state:
-    st.session_state['sales_history'] = []
+# Variables
+shop_name = "Electronic Shop"
+shop_city = "Karachi"
+shop_open = True
 
-# --- Header Section ---
-st.title("🏪 Electronic Shop: Management System")
-st.markdown("Manage your stock and generate professional bills with automatic discounts.")
+st.title(f"🏪 Welcome to {shop_name}")
+st.subheader(f"📍 Location: {shop_city}")
 
-# --- Tabs for Organization ---
-tab1, tab2, tab3 = st.tabs(["🛒 Point of Sale", "📦 Inventory Manager", "📊 Sales Report"])
+# Products Data
+products = {
+    "laptop": 85000, "mobile": 35000, "tv": 50000,
+    "headphones": 2000, "keyboard": 1200, "mouse": 700,
+    "fan": 4000, "iron": 2500, "speaker": 3000,
+    "charger": 900, "camera": 60000, "washing_machine": 55000
+}
 
-# --- Tab 1: Billing System (Point of Sale) ---
-with tab1:
-    st.subheader("Create New Bill")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        customer_name = st.text_input("Customer Name", placeholder="Enter name here...")
-        available_items = st.session_state.inventory[st.session_state.inventory["Stock"] > 0]["Item"].tolist()
-        selected_items = st.multiselect("Select Products to Buy:", available_items)
+st.divider()
+st.subheader("🛍️ Create Purchase Record")
+selected_items = st.multiselect("Select products to buy:", list(products.keys()))
 
-    purchases = []
-    total_bill = 0
+purchases = {}
+if selected_items:
+    cols = st.columns(2) # Items ko display karne ke liye columns
+    for i, item in enumerate(selected_items):
+        with cols[i % 2]:
+            qty = st.number_input(f"Quantity for {item.title()}:", min_value=1, value=1, key=item)
+            purchases[item] = qty
 
-    if selected_items:
-        st.write("---")
-        for item in selected_items:
-            # Get item details
-            item_row = st.session_state.inventory[st.session_state.inventory["Item"] == item].iloc[0]
-            max_stock = int(item_row["Stock"])
-            unit_price = int(item_row["Price"])
-            
-            # Quantity Input
-            qty = st.number_input(f"Quantity for {item} (Available: {max_stock})", min_value=1, max_value=max_stock, key=f"qty_{item}")
-            
-            subtotal = qty * unit_price
-            total_bill += subtotal
-            purchases.append({"Item": item, "Qty": qty, "Price": unit_price, "Subtotal": subtotal})
-
+# Calculation Function with Box Styling
+def show_bill(pur_dict):
+    total = 0
+    # Container start
+    with st.container():
+        st.markdown('<div class="bill-box">', unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: #4CAF50;'>🧾 OFFICIAL INVOICE</h2>", unsafe_allow_html=True)
+        st.write(f"**Shop:** {shop_name} | **City:** {shop_city}")
         st.divider()
         
-        # --- Discount Logic ---
-        final_amount = total_bill
-        discount_applied = 0
+        for item, qty in pur_dict.items():
+            price = products.get(item, 0)
+            cost = price * qty
+            total += cost
+            st.write(f"🔹 {item.title()} (x{qty}) : **Rs {cost:,}**")
         
-        if total_bill > 50000:
-            discount_applied = total_bill * 0.10
-            final_amount = total_bill - discount_applied
-            st.info(f"🎉 10% Discount Applied: -Rs {discount_applied}")
+        st.divider()
         
-        st.subheader(f"Total Amount: Rs {final_amount}")
-
-        if st.button("Confirm Purchase & Print Bill"):
-            # Update Inventory Stock
-            for p in purchases:
-                idx = st.session_state.inventory.index[st.session_state.inventory["Item"] == p["Item"]][0]
-                st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
-            
-            # Record Sale
-            st.session_state.sales_history.append({
-                "Customer": customer_name,
-                "Total Items": len(purchases),
-                "Bill Amount": final_amount
-            })
-            
-            st.success(f"Bill Generated for {customer_name}! Stock updated.")
-            st.balloons()
-
-# --- Tab 2: Inventory Management ---
-with tab2:
-    st.subheader("Manage Product Stock")
-    
-    # Add New Product Form
-    with st.expander("➕ Add New Product to Shop"):
-        new_col1, new_col2, new_col3 = st.columns(3)
-        with new_col1: new_name = st.text_input("Product Name")
-        with new_col2: new_price = st.number_input("Selling Price", min_value=0)
-        with new_col3: new_stock = st.number_input("Initial Stock", min_value=0)
-        
-        if st.button("Update Inventory List"):
-            if new_name:
-                new_row = pd.DataFrame([[new_name, new_price, new_stock]], columns=["Item", "Price", "Stock"])
-                st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
-                st.rerun()
-
-    st.write("### Current Stock Status")
-    st.dataframe(st.session_state.inventory, use_container_width=True)
-
-# --- Tab 3: Sales Reports ---
-with tab3:
-    st.subheader("Performance & Sales History")
-    
-    if st.session_state.sales_history:
-        sales_df = pd.DataFrame(st.session_state.sales_history)
-        
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Total Sales Count", len(sales_df))
-        col_m2.metric("Total Revenue", f"Rs {sales_df['Bill Amount'].sum():,.2f}")
-        
-        st.write("### Recent Transactions")
-        st.table(sales_df)
-    else:
-        st.warning("No sales recorded yet.")
-
-# --- Footer ---
-st.markdown("---")
-st.caption("Electronic Shop Management System | Built with Streamlit")
+        if total > 50000:
+            discount = total * 0.1
