@@ -208,7 +208,10 @@ with tab2:
             if password == ADMIN_PASSWORD:
                 st.session_state.admin_logged_in = True
                 st.success("Access Granted! You can now manage inventory.")
-                st.experimental_rerun()
+                try:
+                    st.experimental_rerun()
+                except AttributeError:
+                    pass
             else:
                 st.error("Incorrect password! Access denied.")
     else:
@@ -229,7 +232,10 @@ with tab2:
                             name, price, stock
                         ]
                         st.success(f"Product '{name}' added successfully!")
-                        st.experimental_rerun()
+                        try:
+                            st.experimental_rerun()
+                        except AttributeError:
+                            pass
 
         # -------- Editable Inventory Table --------
         st.markdown("### Current Inventory")
@@ -248,14 +254,20 @@ with tab2:
                     st.session_state.inventory.at[i, "Price"] = new_price
                     st.session_state.inventory.at[i, "Stock"] = new_stock
                     st.success(f"Item '{new_name}' updated!")
-                    st.experimental_rerun()
+                    try:
+                        st.experimental_rerun()
+                    except AttributeError:
+                        pass
 
         # Show inventory table
         st.dataframe(st.session_state.inventory, use_container_width=True)
 
         if st.button("Logout Admin"):
             st.session_state.admin_logged_in = False
-            st.experimental_rerun()
+            try:
+                st.experimental_rerun()
+            except AttributeError:
+                pass
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
