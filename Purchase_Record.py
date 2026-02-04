@@ -11,16 +11,7 @@ shop_open = True
 st.title(f"🏪 Welcome to {shop_name}")
 st.subheader(f"📍 Location: {shop_city}")
 
-# Step 2: (Tuple)
-owner = ("Muhammad Owais", "Manager", "madanielectronic9105@gmail.com")
-st.sidebar.markdown(f"**Owner:** {owner[0]}")
-st.sidebar.markdown(f"**Contact:** {owner[2]}")
-
-# Step 4: (Set)
-brands = {"Sure", "Sony", "Kenwood", "Paktech", "China Board"}
-st.write("**Brands Available:** " + ", ".join(brands))
-
-# Step 5: (Dictionary)
+# Products Data
 products = {
     "laptop": 85000,
     "mobile": 35000,
@@ -36,23 +27,18 @@ products = {
     "washing_machine": 55000
 }
 
-with st.expander("🛒 View Product Price List"):
-    for name, price in products.items():
-        st.write(f"- {name.title()}: **Rs {price}**")
-
-# Step 6: Streamlit Input (Form use karenge taake interface acha lage)
+# User Selection
 st.divider()
 st.subheader("🛍️ Create Purchase Record")
-
-purchases = {}
 selected_items = st.multiselect("Select products to buy:", list(products.keys()))
 
+purchases = {}
 if selected_items:
     for item in selected_items:
         qty = st.number_input(f"Quantity for {item.title()}:", min_value=1, value=1, key=item)
         purchases[item] = qty
 
-# Step 7 & 8: Calculation & Summary
+# Calculation Function with Discount
 def show_bill(pur_dict):
     total = 0
     st.markdown("### 🧮 Bill Details")
@@ -63,15 +49,24 @@ def show_bill(pur_dict):
         st.write(f"{item.title()} (x{qty}) = **Rs {cost}**")
     
     st.divider()
-    st.subheader(f"📊 Final Payable Amount: Rs {total}")
+    
+    # --- Discount Logic ---
+    # Agar total 50,000 se upar ho toh 10% discount milega
+    if total > 50000:
+        discount = total * 0.10
+        final_amount = total - discount
+        st.info(f"🎉 10% Discount Applied: -Rs {discount}")
+    else:
+        final_amount = total
+        st.write("No discount applied (Buy more than Rs 50,000 for 10% off!)")
+
+    st.subheader(f"📊 Final Payable Amount: Rs {final_amount}")
     st.success("Thank You for Shopping! 😊")
 
-# Step 9 & 10: Run Program
+# Run Button
 if shop_open:
     if st.button("Generate Bill"):
         if not purchases:
             st.warning("Pehle kuch products select karein!")
         else:
             show_bill(purchases)
-else:
-    st.error("Shop Status: ❌ CLOSED")
