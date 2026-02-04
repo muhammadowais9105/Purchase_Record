@@ -9,6 +9,12 @@ import os
 st.set_page_config(page_title="Electronic Shop POS", page_icon="🛒")
 
 # --------------------------------------------------
+# Session State for Save Control
+# --------------------------------------------------
+if "saved" not in st.session_state:
+    st.session_state.saved = False
+
+# --------------------------------------------------
 # Shop Info
 # --------------------------------------------------
 shop_name = "Electronic Shop"
@@ -63,12 +69,13 @@ if selected_items:
         purchases[item] = qty
 
 # --------------------------------------------------
-# Save Transaction (FULL DATA)
+# Save Transaction (FULL DATA, Append Only)
 # --------------------------------------------------
 def save_transaction(customer, payment, bill_df):
     file_name = "transactions.csv"
     date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    bill_df = bill_df.copy()
     bill_df["Date"] = date_time
     bill_df["Customer"] = customer
     bill_df["Payment Method"] = payment
@@ -112,9 +119,6 @@ def show_bill(pur_dict):
     st.success(f"💰 Final Amount: Rs {final_amount}")
     st.info(f"💳 Payment Method: {payment_method}")
 
-    # Save transaction
-    save_transaction(customer_name, payment_method, df)
-
     # Receipt download
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
@@ -124,16 +128,25 @@ def show_bill(pur_dict):
         "text/csv"
     )
 
+    return df  # Return DataFrame for saving
+
 # --------------------------------------------------
-# Generate Bill Button
+# Generate Bill Button (Save Once)
 # --------------------------------------------------
 if st.button("🧾 Generate Bill"):
+    st.session_state.saved = False  # Reset save flag per click
+
     if not customer_name:
         st.warning("Please enter customer name")
     elif not purchases:
         st.warning("Please select at least one product")
     else:
-        show_bill(purchases)
+        bill_df = show_bill(purchases)
+
+        # Save transaction ONLY once
+        if not st.session_state.saved:
+            save_transaction(customer_name, payment_method, bill_df)
+            st.session_state.saved = True
 
 # ==================================================
 # REPORTS & ANALYTICS
