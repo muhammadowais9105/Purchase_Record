@@ -20,9 +20,13 @@ if "inventory" not in st.session_state:
 if "sales_history" not in st.session_state:
     st.session_state.sales_history = []
 
-# NEW: Invoice storage
+# Invoice data
 if "invoice" not in st.session_state:
     st.session_state.invoice = None
+
+# Invoice number counter
+if "invoice_no" not in st.session_state:
+    st.session_state.invoice_no = 1000
 
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
@@ -78,7 +82,14 @@ with tab1:
             total_bill -= discount
             st.info(f"🎉 10% Discount Applied: Rs {discount:,.0f}")
 
-        st.subheader(f"Final Bill: Rs {total_bill:,.0f}")
+        # GST CALCULATION (5%)
+        gst_rate = 0.05
+        gst_amount = total_bill * gst_rate
+        final_amount = total_bill + gst_amount
+
+        st.subheader(f"Amount (After Discount): Rs {total_bill:,.0f}")
+        st.write(f"GST (5%): Rs {gst_amount:,.0f}")
+        st.subheader(f"Final Payable: Rs {final_amount:,.0f}")
 
         if st.button("Confirm Purchase"):
             # Update stock
@@ -88,20 +99,25 @@ with tab1:
                 ][0]
                 st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
 
+            # Update invoice number
+            st.session_state.invoice_no += 1
+
             # Save sales history
             st.session_state.sales_history.append({
+                "Invoice No": f"INV-{st.session_state.invoice_no}",
                 "Customer": customer,
-                "Total Items": len(purchases),
-                "Bill Amount": total_bill
+                "Bill Amount": final_amount
             })
 
-            # SAVE INVOICE
+            # Save invoice
             st.session_state.invoice = {
+                "Invoice No": f"INV-{st.session_state.invoice_no}",
                 "Customer": customer,
                 "Date": datetime.now().strftime("%d-%m-%Y %H:%M"),
                 "Items": purchases,
                 "Discount": discount,
-                "Final Bill": total_bill
+                "GST": gst_amount,
+                "Final Bill": final_amount
             }
 
             st.success("Invoice Generated Successfully 🧾")
@@ -114,6 +130,7 @@ with tab1:
         st.markdown("---")
         st.subheader("🧾 Invoice")
 
+        st.write(f"**Invoice No:** {inv['Invoice No']}")
         st.write(f"**Customer:** {inv['Customer']}")
         st.write(f"**Date:** {inv['Date']}")
 
@@ -121,7 +138,8 @@ with tab1:
         st.table(invoice_df)
 
         st.write(f"**Discount:** Rs {inv['Discount']:,.0f}")
-        st.write(f"### **Total Payable: Rs {inv['Final Bill']:,.0f}**")
+        st.write(f"**GST:** Rs {inv['GST']:,.0f}")
+        st.subheader(f"💰 Total Payable: Rs {inv['Final Bill']:,.0f}")
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
@@ -167,3 +185,5 @@ with tab3:
 # ---------------- FOOTER ----------------
 st.markdown("---")
 st.caption("Electronic Shop Management System | Streamlit App")
+
+
