@@ -1,92 +1,115 @@
 import streamlit as st
 from fpdf import FPDF
+import base64
 
 # --- Page Config ---
-st.set_page_config(page_title="Pro Electronic Store", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="Electronic Shop", page_icon="🛒")
 
-# Initialize Stock in Session State (Taki refresh pe data na ure)
-if 'inventory' not in st.session_state:
-    st.session_state.inventory = {
-        "laptop": {"price": 85000, "stock": 10},
-        "mobile": {"price": 35000, "stock": 20},
-        "tv": {"price": 50000, "stock": 5},
-        "headphones": {"price": 2000, "stock": 50},
-        "camera": {"price": 60000, "stock": 8},
-        "washing_machine": {"price": 55000, "stock": 4}
-    }
-
-# --- Styling ---
+# Custom CSS for the Beautiful Invoice Box
 st.markdown("""
     <style>
-    .stock-card {
-        border-radius: 10px; padding: 10px; background-color: #f0f2f6;
-        border-left: 5px solid #2E7D32; margin-bottom: 10px;
-    }
     .bill-box {
-        border: 2px solid #2E7D32; border-radius: 15px;
-        padding: 25px; background-color: white; box-shadow: 0px 10px 25px rgba(0,0,0,0.1);
+        border: 2px solid #2E7D32;
+        border-radius: 15px;
+        padding: 25px;
+        background-color: #ffffff;
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.1);
+        color: #1E1E1E;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .total-text {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2E7D32;
+        text-align: right;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Sidebar: Inventory Status ---
-with st.sidebar:
-    st.header("📊 Current Stock Status")
-    for item, details in st.session_state.inventory.items():
-        color = "red" if details['stock'] < 3 else "black"
-        st.markdown(f"""<div class='stock-card'>{item.title()}: 
-                    <b style='color:{color}'>{details['stock']}</b> left</div>""", unsafe_allow_html=True)
+# --- Variables ---
+shop_name = "Electronic Shop"
+shop_city = "Karachi"
 
-# --- Main Shop UI ---
-st.title("⚡ Pro Electronic Store Management")
-st.write("Manage sales, stocks, and generate professional invoices.")
+# Products Data
+products = {
+    "laptop": 85000, "mobile": 35000, "tv": 50000,
+    "headphones": 2000, "keyboard": 1200, "mouse": 700,
+    "fan": 4000, "iron": 2500, "speaker": 3000,
+    "charger": 900, "camera": 60000, "washing_machine": 55000
+}
 
-col1, col2 = st.columns([2, 1])
+st.title(f"🏪 Welcome to {shop_name}")
+st.write(f"📍 Location: **{shop_city}**")
 
-with col1:
-    st.subheader("🛒 Customer Selection")
-    selected_items = st.multiselect("Items choose karein:", list(st.session_state.inventory.keys()))
+# --- Selection Section ---
+st.divider()
+st.subheader("🛍️ Select Your Products")
+selected_items = st.multiselect("Pick items from the list:", list(products.keys()))
+
+purchases = {}
+if selected_items:
+    cols = st.columns(2)
+    for i, item in enumerate(selected_items):
+        with cols[i % 2]:
+            qty = st.number_input(f"Qty for {item.title()}:", min_value=1, value=1, key=item)
+            purchases[item] = qty
+
+# --- PDF Generation Function ---
+def create_pdf(pur_dict, total, discount, final):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt=f"{shop_name} - Invoice", ln=True, align='C')
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Location: {shop_city}", ln=True, align='C')
+    pdf.ln(10)
     
-    purchases = {}
-    if selected_items:
-        for item in selected_items:
-            max_qty = st.session_state.inventory[item]['stock']
-            if max_qty > 0:
-                qty = st.number_input(f"Qty for {item.title()} (Max: {max_qty})", 
-                                      min_value=1, max_value=max_qty, key=f"buy_{item}")
-                purchases[item] = qty
-            else:
-                st.error(f"⚠️ {item.title()} is Out of Stock!")
+    pdf.cell(100, 10, txt="Item", border=1)
+    pdf.cell(40, 10, txt="Qty", border=1)
+    pdf.cell(50, 10, txt="Price (Rs)", border=1, ln=True)
+    
+    for item, qty in pur_dict.items():
+        pdf.cell(100, 10, txt=item.title(), border=1)
+        pdf.cell(40, 10, txt=str(qty), border=1)
+        pdf.cell(50, 10, txt=f"{products[item]*qty:,}", border=1, ln=True)
+    
+    pdf.ln(5)
+    if discount > 0:
+        pdf.cell(200, 10, txt=f"Discount: -Rs {discount:,}", ln=True, align='R')
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt=f"Final Total: Rs {final:,}", ln=True, align='R')
+    return pdf.output(dest='S').encode('latin-1')
 
-# --- Bill Generation Logic ---
-with col2:
-    st.subheader("🧾 Invoice Section")
-    if st.button("Generate & Update Stock"):
-        if not purchases:
-            st.warning("Please select items first!")
-        else:
-            total_raw = sum(st.session_state.inventory[item]['price'] * qty for item, qty in purchases.items())
-            discount = total_raw * 0.10 if total_raw > 50000 else 0
-            final_amount = total_raw - discount
+# --- Generate Bill Button Logic ---
+if st.button("🚀 Generate Beautiful Bill"):
+    if not purchases:
+        st.error("Please select at least one item first!")
+    else:
+        # Calculations
+        total_raw = sum(products[item] * qty for item, qty in purchases.items())
+        discount = total_raw * 0.10 if total_raw > 50000 else 0
+        final_amount = total_raw - discount
 
-            # Update Stock in Session State
-            for item, qty in purchases.items():
-                st.session_state.inventory[item]['stock'] -= qty
+        # 1. Display the Beautiful Box
+        st.markdown('<div class="bill-box">', unsafe_allow_html=True)
+        st.markdown(f"<h2 style='text-align: center;'>📄 INVOICE</h2>", unsafe_allow_html=True)
+        
+        for item, qty in purchases.items():
+            cost = products[item] * qty
+            st.write(f"**{item.title()}** × {qty} <span style='float:right;'>Rs {cost:,}</span>", unsafe_allow_html=True)
+        
+        st.divider()
+        if discount > 0:
+            st.write(f"✨ Discount Applied: <span style='float:right; color:red;'>-Rs {discount:,}</span>", unsafe_allow_html=True)
+        
+        st.markdown(f'<p class="total-text">Final Amount: Rs {final_amount:,}</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-            # Display Bill Box
-            st.markdown('<div class="bill-box">', unsafe_allow_html=True)
-            st.markdown("<h3 style='text-align:center;'>INVOICE</h3>", unsafe_allow_html=True)
-            for item, qty in purchases.items():
-                cost = st.session_state.inventory[item]['price'] * qty
-                st.write(f"{item.title()} x{qty}: Rs {cost:,}")
-            
-            st.divider()
-            if discount > 0: st.write(f"Discount: -Rs {discount:,}")
-            st.subheader(f"Total: Rs {final_amount:,}")
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.balloons()
-            st.success("Stock Updated Successfully!")
-
-# --- PDF Feature (Optional) ---
-# (Yahan aap pichla PDF function dobara add kar sakte hain)
+        # 2. Add Download Button
+        pdf_data = create_pdf(purchases, total_raw, discount, final_amount)
+        st.download_button(
+            label="📥 Download PDF Invoice",
+            data=pdf_data,
+            file_name="invoice.pdf",
+            mime="application/pdf"
+        )
