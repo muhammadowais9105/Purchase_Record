@@ -29,6 +29,9 @@ if "invoice_no" not in st.session_state:
 if "shop_logo" not in st.session_state:
     st.session_state.shop_logo = None
 
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
 st.markdown("Manage your stock and generate professional bills with automatic discounts.")
@@ -197,19 +200,44 @@ with tab1:
 with tab2:
     st.subheader("Inventory Manager")
 
-    with st.expander("Add New Product"):
-        name = st.text_input("Product Name")
-        price = st.number_input("Price", min_value=0)
-        stock = st.number_input("Stock", min_value=0)
+    # Admin Password
+    ADMIN_PASSWORD = "admin123"
 
-        if st.button("Add Product"):
-            if name:
-                st.session_state.inventory.loc[len(st.session_state.inventory)] = [
-                    name, price, stock
-                ]
-                st.rerun()
+    if not st.session_state.admin_logged_in:
+        password = st.text_input("Enter Admin Password to manage inventory:", type="password")
+        if st.button("Login"):
+            if password == ADMIN_PASSWORD:
+                st.session_state.admin_logged_in = True
+                st.success("Access Granted! You can now add new products.")
+                st.experimental_rerun()
+            else:
+                st.error("Incorrect password! Access denied.")
+    else:
+        st.info("You are logged in as Admin. Only new products can be added. Existing products cannot be edited!")
 
-    st.dataframe(st.session_state.inventory, use_container_width=True)
+        with st.expander("Add New Product"):
+            name = st.text_input("Product Name")
+            price = st.number_input("Price", min_value=0)
+            stock = st.number_input("Stock", min_value=0)
+
+            if st.button("Add Product"):
+                if name:
+                    # Prevent modifying existing items
+                    if name in st.session_state.inventory["Item"].values:
+                        st.error(f"Item '{name}' already exists! Cannot edit existing items.")
+                    else:
+                        st.session_state.inventory.loc[len(st.session_state.inventory)] = [
+                            name, price, stock
+                        ]
+                        st.success(f"Product '{name}' added successfully!")
+                        st.experimental_rerun()
+
+        # Show inventory (same as before)
+        st.dataframe(st.session_state.inventory, use_container_width=True)
+
+        if st.button("Logout Admin"):
+            st.session_state.admin_logged_in = False
+            st.experimental_rerun()
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
