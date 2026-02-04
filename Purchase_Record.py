@@ -1,7 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import io
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Electronic Shop: Management System",
     page_icon="⚡",
@@ -16,157 +20,125 @@ if "inventory" not in st.session_state:
         "Stock": [10, 20, 15, 50, 40]
     })
 
-if "sales_history" not in st.session_state:
-    st.session_state.sales_history = []
-
 if "invoice" not in st.session_state:
     st.session_state.invoice = None
 
 if "invoice_no" not in st.session_state:
     st.session_state.invoice_no = 1000
 
-if "shop_logo" not in st.session_state:
-    st.session_state.shop_logo = None
-
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["🛒 POS", "📦 Inventory", "📊 Sales", "🏷️ Settings"]
-)
-
-# ================= SETTINGS =================
-with tab4:
-    logo = st.file_uploader("Upload Shop Logo", type=["png", "jpg", "jpeg"])
-    if logo:
-        st.session_state.shop_logo = logo
-        st.success("Logo Uploaded")
-
 # ================= POS =================
-with tab1:
-    customer = st.text_input("Customer Name")
+customer = st.text_input("Customer Name")
 
-    items = st.session_state.inventory[
-        st.session_state.inventory["Stock"] > 0
-    ]["Item"].tolist()
+items = st.session_state.inventory["Item"].tolist()
+selected = st.multiselect("Select Products", items)
 
-    selected = st.multiselect("Select Products", items)
+subtotal = 0
+purchases = []
 
-    subtotal = 0
-    purchases = []
+for item in selected:
+    row = st.session_state.inventory[
+        st.session_state.inventory["Item"] == item
+    ].iloc[0]
 
-    for item in selected:
-        row = st.session_state.inventory[
-            st.session_state.inventory["Item"] == item
-        ].iloc[0]
+    qty = st.number_input(
+        f"Qty for {item}", 1, int(row["Stock"]), key=item
+    )
 
-        qty = st.number_input(
-            f"Qty for {item}", 1, int(row["Stock"]), key=item
-        )
+    total = qty * row["Price"]
+    subtotal += total
 
-        total = qty * row["Price"]
-        subtotal += total
+    purchases.append({
+        "Product": item,
+        "Qty": qty,
+        "Price": row["Price"],
+        "Total": total
+    })
 
-        purchases.append({
-            "Product": item,
-            "Qty": qty,
-            "Price": row["Price"],
-            "Total": total
-        })
+if subtotal > 0:
+    discount = subtotal * 0.10 if subtotal > 50000 else 0
+    gst = (subtotal - discount) * 0.05
+    grand = subtotal - discount + gst
 
-    if subtotal > 0:
-        discount = subtotal * 0.1 if subtotal > 50000 else 0
-        gst = (subtotal - discount) * 0.05
-        grand = subtotal - discount + gst
+    if st.button("Confirm Purchase"):
+        st.session_state.invoice_no += 1
+        st.session_state.invoice = {
+            "Invoice": f"INV-{st.session_state.invoice_no}",
+            "Customer": customer,
+            "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
+            "Items": purchases,
+            "SubTotal": subtotal,
+            "Discount": discount,
+            "GST": gst,
+            "NetTotal": grand
+        }
 
-        if st.button("Confirm Purchase"):
-            st.session_state.invoice_no += 1
-            st.session_state.invoice = {
-                "Invoice": f"INV-{st.session_state.invoice_no}",
-                "Customer": customer,
-                "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
-                "Items": purchases,
-                "SubTotal": subtotal,
-                "Discount": discount,
-                "GST": gst,
-                "NetTotal": grand
-            }
+# ================= RECEIPT + AUTO PDF =================
+if st.session_state.invoice:
+    inv = st.session_state.invoice
 
-    # ================= RECEIPT + AUTO PDF =================
-    if st.session_state.invoice:
-        inv = st.session_state.invoice
+    st.markdown("### 🧾 RECEIPT")
+    st.table(pd.DataFrame(inv["Items"]))
+    st.markdown(f"### 💰 Net Total: Rs {inv['NetTotal']:,.0f}")
 
-        st.markdown(
-            """
-            <style>
-            .invoice-wrap{display:flex;justify-content:center}
-            .invoice{
-                max-width:380px;
-                width:100%;
-                padding:15px;
-                border:1px dashed #555;
-                text-align:center;
-                font-family:monospace;
-            }
-            @media print{
-                body *{visibility:hidden}
-                .invoice,.invoice *{visibility:visible}
-                .invoice{position:absolute;left:50%;transform:translateX(-50%)}
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+    # -------- PDF GENERATION --------
+    def generate_pdf(invoice):
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
 
-        st.markdown('<div class="invoice-wrap"><div class="invoice">', unsafe_allow_html=True)
+        y = height - 50
+        c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(width / 2, y, "ELECTRONIC SHOP RECEIPT")
 
-        if st.session_state.shop_logo:
-            st.image(st.session_state.shop_logo, width=90)
+        y -= 30
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y, f"Invoice #: {invoice['Invoice']}")
+        y -= 15
+        c.drawString(50, y, f"Customer: {invoice['Customer']}")
+        y -= 15
+        c.drawString(50, y, f"Date: {invoice['Date']}")
 
-        st.markdown("### 🧾 RECEIPT")
-        st.write(f"Invoice: {inv['Invoice']}")
-        st.write(f"Date: {inv['Date']}")
-        st.write(f"Customer: {inv['Customer']}")
-        st.markdown("---")
+        y -= 30
+        c.drawString(50, y, "Item")
+        c.drawString(200, y, "Qty")
+        c.drawString(250, y, "Price")
+        c.drawString(330, y, "Total")
 
-        st.table(pd.DataFrame(inv["Items"]))
+        y -= 10
+        c.line(50, y, 550, y)
 
-        st.markdown("---")
-        st.write(f"Subtotal: Rs {inv['SubTotal']:,.0f}")
-        st.write(f"Discount: Rs {inv['Discount']:,.0f}")
-        st.write(f"GST: Rs {inv['GST']:,.0f}")
-        st.markdown(f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}")
+        for item in invoice["Items"]:
+            y -= 20
+            c.drawString(50, y, item["Product"])
+            c.drawString(200, y, str(item["Qty"]))
+            c.drawString(250, y, str(item["Price"]))
+            c.drawString(330, y, str(item["Total"]))
 
-        st.markdown("---")
-        st.write("Thank you for shopping with us")
+        y -= 30
+        c.drawString(50, y, f"Subtotal: Rs {invoice['SubTotal']:,.0f}")
+        y -= 15
+        c.drawString(50, y, f"Discount: Rs {invoice['Discount']:,.0f}")
+        y -= 15
+        c.drawString(50, y, f"GST: Rs {invoice['GST']:,.0f}")
+        y -= 20
 
-        # AUTO PDF PRINT BUTTON
-        st.markdown(
-            """
-            <button onclick="
-                setTimeout(()=>{window.print();},200);
-            " style="
-                margin-top:10px;
-                padding:10px 20px;
-                font-size:16px;
-                background:#198754;
-                color:white;
-                border:none;
-                border-radius:5px;
-                cursor:pointer;">
-                📄 Print / Save PDF
-            </button>
-            """,
-            unsafe_allow_html=True
-        )
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, y, f"NET TOTAL: Rs {invoice['NetTotal']:,.0f}")
 
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+        return buffer
 
-# ================= INVENTORY =================
-with tab2:
-    st.dataframe(st.session_state.inventory)
+    pdf_file = generate_pdf(inv)
 
-# ================= SALES =================
-with tab3:
-    if st.session_state.sales_history:
-        st.table(pd.DataFrame(st.session_state.sales_history))
+    # -------- DOWNLOAD BUTTON --------
+    st.download_button(
+        label="🖨️ Print Receipt (Download PDF)",
+        data=pdf_file,
+        file_name=f"{inv['Invoice']}.pdf",
+        mime="application/pdf"
+    )
