@@ -3,27 +3,34 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# --- Page Config ---
-st.set_page_config(page_title="Electronic Shop", page_icon="🛒")
+# --------------------------------------------------
+# Page Config
+# --------------------------------------------------
+st.set_page_config(page_title="Electronic Shop POS", page_icon="🛒")
 
-# --- Shop Info ---
+# --------------------------------------------------
+# Shop Info
+# --------------------------------------------------
 shop_name = "Electronic Shop"
 shop_city = "Karachi"
-shop_open = True
 
 st.title(f"🏪 {shop_name}")
 st.caption(f"📍 {shop_city}")
 
-# --- Customer Details ---
+# --------------------------------------------------
+# Customer Details
+# --------------------------------------------------
 st.subheader("👤 Customer Details")
-customer_name = st.text_input("Enter customer name:")
+customer_name = st.text_input("Enter customer name")
 
 payment_method = st.selectbox(
-    "Select payment method:",
+    "Payment Method",
     ["Cash", "Credit Card", "Debit Card", "JazzCash", "EasyPaisa"]
 )
 
-# --- Products with Price & Stock ---
+# --------------------------------------------------
+# Products (Price + Stock)
+# --------------------------------------------------
 products = {
     "Laptop": {"price": 85000, "stock": 5},
     "Mobile": {"price": 35000, "stock": 10},
@@ -35,11 +42,13 @@ products = {
     "Iron": {"price": 2500, "stock": 6},
 }
 
-# --- Product Selection ---
+# --------------------------------------------------
+# Product Selection
+# --------------------------------------------------
 st.divider()
 st.subheader("🛍️ Select Products")
 
-selected_items = st.multiselect("Choose products:", products.keys())
+selected_items = st.multiselect("Choose products", products.keys())
 purchases = {}
 
 if selected_items:
@@ -53,26 +62,29 @@ if selected_items:
         )
         purchases[item] = qty
 
+# --------------------------------------------------
+# Save Transaction (FULL DATA)
+# --------------------------------------------------
+def save_transaction(customer, payment, bill_df):
+    file_name = "transactions.csv"
+    date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# --- Save Sale Function ---
-def save_sale(customer, payment, amount):
-    file_name = "sales_data.csv"
-    today = datetime.now().strftime("%Y-%m-%d")
+    bill_df["Date"] = date_time
+    bill_df["Customer"] = customer
+    bill_df["Payment Method"] = payment
 
-    df = pd.DataFrame({
-        "Date": [today],
-        "Customer": [customer],
-        "Payment Method": [payment],
-        "Amount": [amount]
-    })
+    bill_df = bill_df[
+        ["Date", "Customer", "Product", "Quantity", "Unit Price", "Total", "Payment Method"]
+    ]
 
     if os.path.exists(file_name):
-        df.to_csv(file_name, mode="a", header=False, index=False)
+        bill_df.to_csv(file_name, mode="a", header=False, index=False)
     else:
-        df.to_csv(file_name, index=False)
+        bill_df.to_csv(file_name, index=False)
 
-
-# --- Billing Function ---
+# --------------------------------------------------
+# Billing Function
+# --------------------------------------------------
 def show_bill(pur_dict):
     total = 0
     bill_data = []
@@ -100,10 +112,10 @@ def show_bill(pur_dict):
     st.success(f"💰 Final Amount: Rs {final_amount}")
     st.info(f"💳 Payment Method: {payment_method}")
 
-    # Save sale for reports
-    save_sale(customer_name, payment_method, final_amount)
+    # Save transaction
+    save_transaction(customer_name, payment_method, df)
 
-    # Receipt Download
+    # Receipt download
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
         "📥 Download Receipt",
@@ -112,26 +124,27 @@ def show_bill(pur_dict):
         "text/csv"
     )
 
+# --------------------------------------------------
+# Generate Bill Button
+# --------------------------------------------------
+if st.button("🧾 Generate Bill"):
+    if not customer_name:
+        st.warning("Please enter customer name")
+    elif not purchases:
+        st.warning("Please select at least one product")
+    else:
+        show_bill(purchases)
 
-# --- Generate Bill ---
-if shop_open:
-    if st.button("🧾 Generate Bill"):
-        if not customer_name:
-            st.warning("Please enter customer name")
-        elif not purchases:
-            st.warning("Please select at least one product")
-        else:
-            show_bill(purchases)
-
-
-# ===================== REPORTS SECTION =====================
-
+# ==================================================
+# REPORTS & ANALYTICS
+# ==================================================
 st.divider()
 st.header("📊 Sales Reports & Analytics")
 
-if os.path.exists("sales_data.csv"):
-    sales_df = pd.read_csv("sales_data.csv")
+if os.path.exists("transactions.csv"):
+    sales_df = pd.read_csv("transactions.csv")
     sales_df["Date"] = pd.to_datetime(sales_df["Date"])
+    sales_df["Amount"] = sales_df["Total"]
 
     report_type = st.selectbox(
         "Select Report Type",
@@ -175,4 +188,4 @@ if os.path.exists("sales_data.csv"):
         )
 
 else:
-    st.info("No sales data available yet. Generate a bill first.")
+    st.info("No transactions found. Generate a bill first.")
