@@ -20,11 +20,9 @@ if "inventory" not in st.session_state:
 if "sales_history" not in st.session_state:
     st.session_state.sales_history = []
 
-# Invoice data
 if "invoice" not in st.session_state:
     st.session_state.invoice = None
 
-# Invoice number counter
 if "invoice_no" not in st.session_state:
     st.session_state.invoice_no = 1000
 
@@ -50,7 +48,7 @@ with tab1:
 
     selected_items = st.multiselect("Select Products", items_available)
 
-    total_bill = 0
+    subtotal_amount = 0
     purchases = []
 
     for item in selected_items:
@@ -65,81 +63,95 @@ with tab1:
             key=item
         )
 
-        subtotal = qty * row["Price"]
-        total_bill += subtotal
+        total = qty * row["Price"]
+        subtotal_amount += total
 
         purchases.append({
             "Item": item,
             "Qty": qty,
             "Price": row["Price"],
-            "Total": subtotal
+            "Total": total
         })
 
-    if total_bill > 0:
+    if subtotal_amount > 0:
         discount = 0
-        if total_bill > 50000:
-            discount = total_bill * 0.10
-            total_bill -= discount
-            st.info(f"🎉 10% Discount Applied: Rs {discount:,.0f}")
+        if subtotal_amount > 50000:
+            discount = subtotal_amount * 0.10
+            st.info(f"🎉 10% Discount: Rs {discount:,.0f}")
 
-        # GST CALCULATION (5%)
+        after_discount = subtotal_amount - discount
+
         gst_rate = 0.05
-        gst_amount = total_bill * gst_rate
-        final_amount = total_bill + gst_amount
+        gst_amount = after_discount * gst_rate
+        grand_total = after_discount + gst_amount
 
-        st.subheader(f"Amount (After Discount): Rs {total_bill:,.0f}")
-        st.write(f"GST (5%): Rs {gst_amount:,.0f}")
-        st.subheader(f"Final Payable: Rs {final_amount:,.0f}")
+        st.subheader(f"Grand Total: Rs {grand_total:,.0f}")
 
         if st.button("Confirm Purchase"):
-            # Update stock
             for p in purchases:
                 idx = st.session_state.inventory.index[
                     st.session_state.inventory["Item"] == p["Item"]
                 ][0]
                 st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
 
-            # Update invoice number
             st.session_state.invoice_no += 1
+            invoice_number = f"INV-{st.session_state.invoice_no}"
 
-            # Save sales history
             st.session_state.sales_history.append({
-                "Invoice No": f"INV-{st.session_state.invoice_no}",
+                "Invoice No": invoice_number,
                 "Customer": customer,
-                "Bill Amount": final_amount
+                "Amount": grand_total
             })
 
-            # Save invoice
             st.session_state.invoice = {
-                "Invoice No": f"INV-{st.session_state.invoice_no}",
+                "Invoice No": invoice_number,
                 "Customer": customer,
                 "Date": datetime.now().strftime("%d-%m-%Y %H:%M"),
                 "Items": purchases,
+                "Sub Total": subtotal_amount,
                 "Discount": discount,
                 "GST": gst_amount,
-                "Final Bill": final_amount
+                "Grand Total": grand_total
             }
 
             st.success("Invoice Generated Successfully 🧾")
             st.balloons()
 
-    # ---------------- SHOW INVOICE ----------------
+    # ================= SHOW BIG INVOICE =================
     if st.session_state.invoice:
         inv = st.session_state.invoice
 
         st.markdown("---")
-        st.subheader("🧾 Invoice")
+        st.markdown("## 🧾 **INVOICE**")
 
-        st.write(f"**Invoice No:** {inv['Invoice No']}")
-        st.write(f"**Customer:** {inv['Customer']}")
-        st.write(f"**Date:** {inv['Date']}")
+        # Shop Details
+        st.markdown("""
+        **Electronic Shop**  
+        Main Market, Karachi  
+        Phone: 0300-1234567  
+        """)
 
-        invoice_df = pd.DataFrame(inv["Items"])
-        st.table(invoice_df)
+        col1, col2 = st.columns(2)
+        col1.write(f"**Invoice No:** {inv['Invoice No']}")
+        col1.write(f"**Customer:** {inv['Customer']}")
+        col2.write(f"**Date:** {inv['Date']}")
+        col2.write("**Payment:** Cash")
 
+        st.markdown("### 🛒 Purchased Items")
+        st.table(pd.DataFrame(inv["Items"]))
+
+        st.markdown("---")
+        st.write(f"**Sub Total:** Rs {inv['Sub Total']:,.0f}")
         st.write(f"**Discount:** Rs {inv['Discount']:,.0f}")
-        st.write(f"**GST:** Rs {inv['GST']:,.0f}")
-        st.subheader(f"💰 Total Payable: Rs {inv['Final Bill']:,.0f}")
+        st.write(f"**GST (5%):** Rs {inv['GST']:,.0f}")
+
+        st.markdown(
+            f"## 💰 **GRAND TOTAL: Rs {inv['Grand Total']:,.0f}**"
+        )
+
+        st.markdown("---")
+        st.markdown("### 🙏 Thank you for shopping with us!")
+        st.markdown("**Goods once sold will not be returned**")
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
@@ -161,20 +173,15 @@ with tab2:
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
-    st.subheader("Performance & Sales History")
+    st.subheader("Sales Report")
 
     if st.session_state.sales_history:
-        sales_df = pd.DataFrame(st.session_state.sales_history)
+        df = pd.DataFrame(st.session_state.sales_history)
+        st.table(df)
 
-        c1, c2 = st.columns(2)
-        c1.metric("Total Sales", len(sales_df))
-        c2.metric("Total Revenue", f"Rs {sales_df['Bill Amount'].sum():,.0f}")
-
-        st.table(sales_df)
-
-        csv = sales_df.to_csv(index=False).encode("utf-8")
+        csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "⬇️ Download Sales Report (CSV)",
+            "⬇️ Download Sales Report",
             csv,
             "sales_report.csv",
             "text/csv"
