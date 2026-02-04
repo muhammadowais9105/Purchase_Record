@@ -130,23 +130,40 @@ with tab1:
             st.success("Invoice Generated Successfully")
             st.balloons()
 
-    # ================= RECEIPT STYLE INVOICE =================
+    # ================= CENTER ALIGNED RECEIPT =================
     if st.session_state.invoice:
         inv = st.session_state.invoice
-        st.markdown("---")
 
-        st.markdown("### 🧾 RECEIPT")
+        # CSS for center invoice
+        st.markdown(
+            """
+            <style>
+            .invoice-box {
+                max-width: 420px;
+                margin: auto;
+                padding: 15px;
+                border: 1px dashed #888;
+                font-family: monospace;
+                text-align: center;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown('<div class="invoice-box">', unsafe_allow_html=True)
+
         if st.session_state.shop_logo:
             st.image(st.session_state.shop_logo, width=100)
 
+        st.markdown("### 🧾 RECEIPT")
         st.markdown("**Electronic Shop**  \nMain Market, Karachi")
         st.markdown("---")
 
-        c1, c2 = st.columns(2)
-        c1.write(f"Invoice #: {inv['Invoice']}")
-        c1.write("Cashier: 001")
-        c2.write(f"Date: {inv['Date']}")
-        c2.write(f"Customer: {inv['Customer']}")
+        st.write(f"Invoice #: {inv['Invoice']}")
+        st.write(f"Date: {inv['Date']}")
+        st.write(f"Customer: {inv['Customer']}")
+        st.write("Payment: Cash")
 
         st.markdown("---")
 
@@ -160,13 +177,14 @@ with tab1:
         st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
 
         st.markdown(
-            f"### 💰 NET TOTAL (RECEIVED): Rs {inv['NetTotal']:,.0f}"
+            f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}"
         )
 
         st.markdown("---")
-        st.write("Payment Method: Cash")
         st.write("Thank you for shopping with us")
         st.write("Goods once sold will not be returned")
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
