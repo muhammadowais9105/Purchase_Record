@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -18,6 +19,10 @@ if "inventory" not in st.session_state:
 
 if "sales_history" not in st.session_state:
     st.session_state.sales_history = []
+
+# NEW: Invoice storage
+if "invoice" not in st.session_state:
+    st.session_state.invoice = None
 
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
@@ -59,7 +64,12 @@ with tab1:
         subtotal = qty * row["Price"]
         total_bill += subtotal
 
-        purchases.append({"Item": item, "Qty": qty})
+        purchases.append({
+            "Item": item,
+            "Qty": qty,
+            "Price": row["Price"],
+            "Total": subtotal
+        })
 
     if total_bill > 0:
         discount = 0
@@ -71,20 +81,47 @@ with tab1:
         st.subheader(f"Final Bill: Rs {total_bill:,.0f}")
 
         if st.button("Confirm Purchase"):
+            # Update stock
             for p in purchases:
                 idx = st.session_state.inventory.index[
                     st.session_state.inventory["Item"] == p["Item"]
                 ][0]
                 st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
 
+            # Save sales history
             st.session_state.sales_history.append({
                 "Customer": customer,
                 "Total Items": len(purchases),
                 "Bill Amount": total_bill
             })
 
-            st.success("Bill Generated Successfully 🎉")
+            # SAVE INVOICE
+            st.session_state.invoice = {
+                "Customer": customer,
+                "Date": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                "Items": purchases,
+                "Discount": discount,
+                "Final Bill": total_bill
+            }
+
+            st.success("Invoice Generated Successfully 🧾")
             st.balloons()
+
+    # ---------------- SHOW INVOICE ----------------
+    if st.session_state.invoice:
+        inv = st.session_state.invoice
+
+        st.markdown("---")
+        st.subheader("🧾 Invoice")
+
+        st.write(f"**Customer:** {inv['Customer']}")
+        st.write(f"**Date:** {inv['Date']}")
+
+        invoice_df = pd.DataFrame(inv["Items"])
+        st.table(invoice_df)
+
+        st.write(f"**Discount:** Rs {inv['Discount']:,.0f}")
+        st.write(f"### **Total Payable: Rs {inv['Final Bill']:,.0f}**")
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
@@ -115,10 +152,8 @@ with tab3:
         c1.metric("Total Sales", len(sales_df))
         c2.metric("Total Revenue", f"Rs {sales_df['Bill Amount'].sum():,.0f}")
 
-        st.write("### Recent Transactions")
         st.table(sales_df)
 
-        # -------- CSV DOWNLOAD (ERROR FREE) --------
         csv = sales_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             "⬇️ Download Sales Report (CSV)",
@@ -126,7 +161,6 @@ with tab3:
             "sales_report.csv",
             "text/csv"
         )
-
     else:
         st.info("No sales data available")
 
