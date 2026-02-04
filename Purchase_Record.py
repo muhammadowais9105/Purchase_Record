@@ -1,125 +1,56 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 
-# --- Page Config ---
-st.set_page_config(page_title="ShopMaster Analytics", page_icon="📊", layout="wide")
+st.set_page_config(page_title="ShopMaster 2026", layout="wide")
 
-# --- INITIALIZE DATA ---
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+# Database setup
 if 'inventory' not in st.session_state:
-    st.session_state.inventory = pd.DataFrame()
-if 'ledger' not in st.session_state:
-    st.session_state.ledger = pd.DataFrame(columns=["Timestamp", "Type", "Details", "Amount", "Profit"])
-if 'expenses' not in st.session_state:
-    st.session_state.expenses = pd.DataFrame(columns=["Timestamp", "Category", "Amount"])
+    st.session_state['inventory'] = pd.DataFrame(columns=["Item", "Price", "Stock"])
+if 'sales' not in st.session_state:
+    st.session_state['sales'] = []
 
-# --- SECURITY ---
-def check_password():
-    if not st.session_state.authenticated:
-        st.title("🛡️ ShopMaster Secure Login")
-        with st.container(border=True):
-            user_pwd = st.text_input("Enter Admin Password", type="password")
-            if st.button("Access System", use_container_width=True):
-                if user_pwd == "123":
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Password")
-        return False
-    return True
+st.title("🛒 ShopMaster: Digital Billing & Inventory")
 
-if check_password():
-    st.sidebar.title("🚀 ShopMaster 2026")
-    menu = st.sidebar.radio("Navigate", ["Connection Center", "Sell (POS)", "Buy (Restock)", "Expenses", "Profit & Loss"])
+tab1, tab2, tab3 = st.tabs(["➕ Add Stock", "🧾 Create Bill", "📊 Reports"])
+
+with tab1:
+    st.header("Stock Management")
+    col1, col2, col3 = st.columns(3)
+    with col1: name = st.text_input("Product Name")
+    with col2: price = st.number_input("Selling Price", min_value=0)
+    with col3: stock = st.number_input("Opening Stock", min_value=0)
     
-    # --- 1. CONNECTION CENTER ---
-    if menu == "Connection Center":
-        st.title("📂 Database Connection")
-        uploaded_file = st.file_uploader("Upload Inventory Excel", type=["xlsx"])
-        if uploaded_file:
-            st.session_state.inventory = pd.read_excel(uploaded_file)
-            st.success("✅ Records Synced!")
-            st.dataframe(st.session_state.inventory, use_container_width=True)
+    if st.button("Add to Inventory"):
+        new_item = pd.DataFrame([[name, price, stock]], columns=["Item", "Price", "Stock"])
+        st.session_state.inventory = pd.concat([st.session_state.inventory, new_item], ignore_index=True)
+        st.success("Stock Updated!")
 
-    # --- 2. SELL (POS) ---
-    elif menu == "Sell (POS)":
-        st.title("🛒 Sales Counter")
-        if st.session_state.inventory.empty:
-            st.warning("⚠️ Upload inventory first!")
-        else:
-            options = st.session_state.inventory["Product"].tolist()
-            selected = st.multiselect("Select products:", options)
-            if selected:
-                ts, tp = 0, 0
-                details = []
-                for item in selected:
-                    row = st.session_state.inventory.loc[st.session_state.inventory["Product"] == item]
-                    q = st.number_input(f"Qty for {item}", 1, int(row["Stock"].values[0]), key=item)
-                    ts += q * row["Price"].values[0]
-                    tp += q * (row["Price"].values[0] - row["Cost"].values[0])
-                    details.append(f"{item}(x{q})")
-                
-                if st.button("Complete Sale", type="primary"):
-                    for item in selected:
-                        st.session_state.inventory.loc[st.session_state.inventory["Product"] == item, "Stock"] -= q
-                    new_sale = {"Timestamp": pd.Timestamp.now(), "Type": "SALE", "Details": ", ".join(details), "Amount": ts, "Profit": tp}
-                    st.session_state.ledger = pd.concat([st.session_state.ledger, pd.DataFrame([new_sale])], ignore_index=True)
-                    st.success(f"Sale Recorded! Profit: Rs {tp:,}")
-
-    # --- 3. EXPENSES ---
-    elif menu == "Expenses":
-        st.title("💸 Daily Expenses")
-        with st.form("exp_form"):
-            cat = st.selectbox("Category", ["Rent", "Electricity", "Salary", "Food", "Other"])
-            amt = st.number_input("Amount", min_value=0)
-            if st.form_submit_button("Save Expense"):
-                new_exp = {"Timestamp": pd.Timestamp.now(), "Category": cat, "Amount": amt}
-                st.session_state.expenses = pd.concat([st.session_state.expenses, pd.DataFrame([new_exp])], ignore_index=True)
-                st.success("Expense Recorded!")
-
-    # --- 4. PROFIT & LOSS (WITH GRAPHS) ---
-    elif menu == "Profit & Loss":
-        st.title("📉 Performance Analytics")
+with tab2:
+    st.header("Customer Billing")
+    if not st.session_state.inventory.empty:
+        c_name = st.text_input("Customer Name")
+        item_to_sell = st.selectbox("Select Product", st.session_state.inventory["Item"])
+        qty_to_sell = st.number_input("Quantity", min_value=1)
         
-        # Financial Summary
-        gross_profit = st.session_state.ledger["Profit"].sum()
-        total_exp = st.session_state.expenses["Amount"].sum()
-        net_profit = gross_profit - total_exp
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Gross Profit", f"Rs {gross_profit:,}")
-        c2.metric("Total Expenses", f"Rs {total_exp:,}", delta_color="inverse")
-        c3.metric("NET PROFIT", f"Rs {net_profit:,}")
+        if st.button("Generate Bill"):
+            idx = st.session_state.inventory.index[st.session_state.inventory["Item"] == item_to_sell][0]
+            if st.session_state.inventory.at[idx, "Stock"] >= qty_to_sell:
+                # Update Stock
+                st.session_state.inventory.at[idx, "Stock"] -= qty_to_sell
+                total = st.session_state.inventory.at[idx, "Price"] * qty_to_sell
+                # Record Sale
+                st.session_state.sales.append({"Customer": c_name, "Item": item_to_sell, "Total": total})
+                st.balloons()
+                st.write(f"### Bill for {c_name}: Rs {total}")
+            else:
+                st.error("Out of Stock!")
+    else:
+        st.info("Pehle 'Add Stock' tab mein ja kar saaman add karein.")
 
-        st.divider()
-        
-        # --- VISUAL CHARTS ---
-        st.subheader("📅 7-Day Performance Trends")
-        if not st.session_state.ledger.empty:
-            # Preparing data for chart
-            chart_data = st.session_state.ledger.copy()
-            chart_data['Date'] = chart_data['Timestamp'].dt.date
-            daily_profit = chart_data.groupby('Date')['Profit'].sum()
-            
-            st.line_chart(daily_profit)
-            
-            # Expense Distribution
-            if not st.session_state.expenses.empty:
-                st.subheader("🍕 Expense Breakdown")
-                exp_dist = st.session_state.expenses.groupby('Category')['Amount'].sum()
-                st.bar_chart(exp_dist)
-        else:
-            st.info("No data available yet to show trends.")
-
-        # Export
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            st.session_state.inventory.to_excel(writer, index=False, sheet_name='Inventory')
-            st.session_state.ledger.to_excel(writer, index=False, sheet_name='Profit_Report')
-        st.download_button("📥 Download Final 2026 Report", output.getvalue(), "Business_Report_2026.xlsx")
-
-    if st.sidebar.button("Logout"):
-        st.session_state.authenticated = False
-        st.rerun()
+with tab3:
+    st.header("Sales Report")
+    if st.session_state.sales:
+        st.table(pd.DataFrame(st.session_state.sales))
+        st.metric("Total Today's Sale", f"Rs {sum(s['Total'] for s in st.session_state.sales)}")
+    else:
+        st.write("No sales yet.")
