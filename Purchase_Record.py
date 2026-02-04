@@ -1,221 +1,176 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import base64
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Electronic Shop: Management System",
-    page_icon="⚡",
+    page_title="Electronic Shop POS",
+    page_icon="🧾",
     layout="wide"
 )
 
 # ---------------- SESSION STATE ----------------
 if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame({
-        "Item": ["Laptop", "Mobile", "TV", "Headphones", "Keyboard"],
-        "Price": [85000, 35000, 50000, 2000, 1200],
-        "Stock": [10, 20, 15, 50, 40]
+        "Item": ["Laptop", "Mobile", "TV"],
+        "Price": [85000, 35000, 50000],
+        "Stock": [10, 20, 15]
     })
-
-if "sales_history" not in st.session_state:
-    st.session_state.sales_history = []
 
 if "invoice" not in st.session_state:
     st.session_state.invoice = None
 
 if "invoice_no" not in st.session_state:
-    st.session_state.invoice_no = 1000
+    st.session_state.invoice_no = 17128
 
-# NEW: Shop Logo
-if "shop_logo" not in st.session_state:
-    st.session_state.shop_logo = None
+if "logo" not in st.session_state:
+    st.session_state.logo = None
+
+# ---------------- RECEIPT FUNCTION ----------------
+def show_receipt(inv, logo_base64=None):
+    html = f"""
+    <div style="
+        width:300px;
+        margin:auto;
+        font-family:monospace;
+        border:1px dashed black;
+        padding:10px;
+        background:#fff;
+    ">
+        <h3 style="text-align:center;">SALE INVOICE</h3>
+
+        {"<div style='text-align:center;'><img src='data:image/png;base64,"+logo_base64+"' width='120'></div>" if logo_base64 else ""}
+
+        <p style="text-align:center;">
+        <b>ELECTRONIC SHOP</b><br>
+        Main Market, Karachi<br>
+        Ph: 0300-1234567
+        </p>
+
+        <hr>
+
+        <p>
+        Invoice #: {inv['Invoice No']}<br>
+        Date: {inv['Date']}<br>
+        Customer: {inv['Customer']}
+        </p>
+
+        <hr>
+
+        <table width="100%">
+            <tr>
+                <th align="left">Item</th>
+                <th>Qty</th>
+                <th align="right">Total</th>
+            </tr>
+    """
+
+    for i in inv["Items"]:
+        html += f"""
+        <tr>
+            <td>{i['Item']}</td>
+            <td align="center">{i['Qty']}</td>
+            <td align="right">{i['Total']}</td>
+        </tr>
+        """
+
+    html += f"""
+        </table>
+
+        <hr>
+
+        <p>
+        Sub Total: {inv['Sub Total']}<br>
+        GST (5%): {inv['GST']}<br>
+        Discount: {inv['Discount']}
+        </p>
+
+        <h3 style="text-align:center;">
+        NET TOTAL: Rs {inv['Grand Total']}
+        </h3>
+
+        <hr>
+
+        <p style="text-align:center;">
+        Payment: Cash<br>
+        Thank you for shopping!
+        </p>
+    </div>
+    """
+
+    st.markdown(html, unsafe_allow_html=True)
 
 # ---------------- HEADER ----------------
-st.title("🏪 Electronic Shop: Management System")
-st.markdown("Manage your stock and generate professional bills with automatic discounts.")
+st.title("🧾 Electronic Shop POS System")
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "🛒 Point of Sale",
-    "📦 Inventory Manager",
-    "📊 Sales Report",
-    "🏷️ Shop Settings"
-])
+tab1, tab2 = st.tabs(["🛒 POS", "⚙️ Settings"])
 
-# ================= TAB 4 : SHOP SETTINGS =================
-with tab4:
-    st.subheader("Upload Shop Logo")
-
-    logo = st.file_uploader(
-        "Upload Shop Logo (PNG / JPG)",
-        type=["png", "jpg", "jpeg"]
-    )
-
+# ---------------- SETTINGS ----------------
+with tab2:
+    st.subheader("Shop Logo")
+    logo = st.file_uploader("Upload Logo", type=["png", "jpg"])
     if logo:
-        st.session_state.shop_logo = logo
-        st.success("Logo uploaded successfully ✅")
+        st.session_state.logo = base64.b64encode(logo.read()).decode()
 
-    if st.session_state.shop_logo:
-        st.image(st.session_state.shop_logo, width=200, caption="Current Shop Logo")
-
-# ================= TAB 1 : POS =================
+# ---------------- POS ----------------
 with tab1:
-    st.subheader("Create New Bill")
-
     customer = st.text_input("Customer Name")
 
-    items_available = st.session_state.inventory[
-        st.session_state.inventory["Stock"] > 0
-    ]["Item"].tolist()
+    items = st.multiselect(
+        "Select Items",
+        st.session_state.inventory["Item"].tolist()
+    )
 
-    selected_items = st.multiselect("Select Products", items_available)
-
-    subtotal_amount = 0
     purchases = []
+    subtotal = 0
 
-    for item in selected_items:
+    for item in items:
         row = st.session_state.inventory[
             st.session_state.inventory["Item"] == item
         ].iloc[0]
 
         qty = st.number_input(
-            f"Quantity for {item}",
-            min_value=1,
-            max_value=int(row["Stock"]),
-            key=item
+            f"Qty for {item}",
+            1, int(row["Stock"])
         )
 
         total = qty * row["Price"]
-        subtotal_amount += total
+        subtotal += total
 
         purchases.append({
             "Item": item,
             "Qty": qty,
-            "Price": row["Price"],
             "Total": total
         })
 
-    if subtotal_amount > 0:
-        discount = 0
-        if subtotal_amount > 50000:
-            discount = subtotal_amount * 0.10
-            st.info(f"🎉 10% Discount: Rs {discount:,.0f}")
+    if subtotal > 0:
+        gst = int(subtotal * 0.05)
+        discount = int(subtotal * 0.10) if subtotal > 50000 else 0
+        grand_total = subtotal + gst - discount
 
-        after_discount = subtotal_amount - discount
-        gst_rate = 0.05
-        gst_amount = after_discount * gst_rate
-        grand_total = after_discount + gst_amount
+        st.write(f"**Payable: Rs {grand_total}**")
 
-        st.subheader(f"Grand Total: Rs {grand_total:,.0f}")
-
-        if st.button("Confirm Purchase"):
-            for p in purchases:
-                idx = st.session_state.inventory.index[
-                    st.session_state.inventory["Item"] == p["Item"]
-                ][0]
-                st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
-
+        if st.button("Confirm Order"):
             st.session_state.invoice_no += 1
-            invoice_number = f"INV-{st.session_state.invoice_no}"
-
-            st.session_state.sales_history.append({
-                "Invoice No": invoice_number,
-                "Customer": customer,
-                "Amount": grand_total
-            })
 
             st.session_state.invoice = {
-                "Invoice No": invoice_number,
+                "Invoice No": f"INV-{st.session_state.invoice_no}",
                 "Customer": customer,
-                "Date": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                "Date": datetime.now().strftime("%d/%m/%Y %I:%M %p"),
                 "Items": purchases,
-                "Sub Total": subtotal_amount,
+                "Sub Total": subtotal,
+                "GST": gst,
                 "Discount": discount,
-                "GST": gst_amount,
                 "Grand Total": grand_total
             }
 
-            st.success("Invoice Generated Successfully 🧾")
-            st.balloons()
+            st.success("Order Confirmed ✔️")
 
-    # ================= SHOW BIG INVOICE =================
+    # -------- SHOW RECEIPT --------
     if st.session_state.invoice:
-        inv = st.session_state.invoice
-
-        st.markdown("---")
-
-        # Logo + Invoice Title
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            if st.session_state.shop_logo:
-                st.image(st.session_state.shop_logo, width=120)
-        with col2:
-            st.markdown("## 🧾 **INVOICE**")
-            st.write("**Electronic Shop**")
-            st.write("Main Market, Karachi")
-            st.write("Phone: 0300-1234567")
-
-        st.markdown("---")
-
-        colA, colB = st.columns(2)
-        colA.write(f"**Invoice No:** {inv['Invoice No']}")
-        colA.write(f"**Customer:** {inv['Customer']}")
-        colB.write(f"**Date:** {inv['Date']}")
-        colB.write("**Payment:** Cash")
-
-        st.markdown("### 🛒 Purchased Items")
-        st.table(pd.DataFrame(inv["Items"]))
-
-        st.markdown("---")
-        st.write(f"**Sub Total:** Rs {inv['Sub Total']:,.0f}")
-        st.write(f"**Discount:** Rs {inv['Discount']:,.0f}")
-        st.write(f"**GST (5%):** Rs {inv['GST']:,.0f}")
-
-        st.markdown(
-            f"## 💰 **GRAND TOTAL: Rs {inv['Grand Total']:,.0f}**"
+        st.markdown("### 🧾 Receipt")
+        show_receipt(
+            st.session_state.invoice,
+            st.session_state.logo
         )
-
-        st.markdown("---")
-        st.markdown("### 🙏 Thank you for shopping with us!")
-        st.markdown("**Goods once sold will not be returned**")
-
-# ================= TAB 2 : INVENTORY =================
-with tab2:
-    st.subheader("Inventory Manager")
-
-    with st.expander("➕ Add New Product"):
-        name = st.text_input("Product Name")
-        price = st.number_input("Price", min_value=0)
-        stock = st.number_input("Stock", min_value=0)
-
-        if st.button("Add Product"):
-            if name:
-                st.session_state.inventory.loc[len(st.session_state.inventory)] = [
-                    name, price, stock
-                ]
-                st.rerun()
-
-    st.dataframe(st.session_state.inventory, use_container_width=True)
-
-# ================= TAB 3 : SALES REPORT =================
-with tab3:
-    st.subheader("Sales Report")
-
-    if st.session_state.sales_history:
-        df = pd.DataFrame(st.session_state.sales_history)
-        st.table(df)
-
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Download Sales Report",
-            csv,
-            "sales_report.csv",
-            "text/csv"
-        )
-    else:
-        st.info("No sales data available")
-
-# ---------------- FOOTER ----------------
-st.markdown("---")
-st.caption("Electronic Shop Management System | Streamlit App")
-
-
