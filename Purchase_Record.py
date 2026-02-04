@@ -1,51 +1,106 @@
+import streamlit as st
 import pandas as pd
 
+# --- Page Config ---
+st.set_page_config(page_title="Electronic Shop", page_icon="🛒")
+
+# --- Shop Info ---
+shop_name = "Electronic Shop"
+shop_city = "Karachi"
+shop_open = True
+
+st.title(f"🏪 {shop_name}")
+st.caption(f"📍 {shop_city}")
+
+# --- Customer Details ---
+st.subheader("👤 Customer Details")
+customer_name = st.text_input("Enter customer name:")
+
+payment_method = st.selectbox(
+    "Select payment method:",
+    ["Cash", "Credit Card", "Debit Card", "JazzCash", "EasyPaisa"]
+)
+
+# --- Products with Price & Stock ---
+products = {
+    "Laptop": {"price": 85000, "stock": 5},
+    "Mobile": {"price": 35000, "stock": 10},
+    "TV": {"price": 50000, "stock": 4},
+    "Headphones": {"price": 2000, "stock": 20},
+    "Keyboard": {"price": 1200, "stock": 15},
+    "Mouse": {"price": 700, "stock": 30},
+    "Fan": {"price": 4000, "stock": 8},
+    "Iron": {"price": 2500, "stock": 6},
+}
+
 st.divider()
-st.header("📈 Sales Analytics (Monthly / Yearly)")
+st.subheader("🛍️ Select Products")
 
-try:
-    df = pd.read_csv("daily_sales.csv")
-    df["Date"] = pd.to_datetime(df["Date"])
+selected_items = st.multiselect("Choose products:", products.keys())
+purchases = {}
 
-    # --- Select Report Type ---
-    report_type = st.selectbox(
-        "Select Report Type:",
-        ["Monthly Report", "Yearly Report"]
+if selected_items:
+    for item in selected_items:
+        max_qty = products[item]["stock"]
+        qty = st.number_input(
+            f"{item} (Stock: {max_qty})",
+            min_value=1,
+            max_value=max_qty,
+            value=1,
+            key=item
+        )
+        purchases[item] = qty
+
+
+# --- Billing Function ---
+def show_bill(pur_dict):
+    total = 0
+    bill_data = []
+
+    for item, qty in pur_dict.items():
+        price = products[item]["price"]
+        cost = price * qty
+        total += cost
+        bill_data.append([item, qty, price, cost])
+
+    df = pd.DataFrame(
+        bill_data,
+        columns=["Product", "Quantity", "Unit Price", "Total"]
     )
 
-    if report_type == "Monthly Report":
-        df["Month"] = df["Date"].dt.to_period("M")
-        summary = df.groupby("Month")["Amount"].sum().reset_index()
+    st.subheader("🧾 Order Summary")
+    st.table(df)
 
-        st.subheader("📅 Monthly Sales Report")
-        st.table(summary)
-
-        st.bar_chart(summary.set_index("Month"))
-
-        csv = summary.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "📥 Download Monthly Report",
-            csv,
-            "monthly_sales_report.csv",
-            "text/csv"
-        )
-
+    # --- Discount ---
+    if total > 50000:
+        discount = total * 0.10
     else:
-        df["Year"] = df["Date"].dt.year
-        summary = df.groupby("Year")["Amount"].sum().reset_index()
+        discount = 0
 
-        st.subheader("📆 Yearly Sales Report")
-        st.table(summary)
+    final_amount = total - discount
 
-        st.line_chart(summary.set_index("Year"))
+    st.divider()
+    st.write(f"**Subtotal:** Rs {total}")
+    st.write(f"**Discount:** Rs {discount}")
+    st.success(f"💰 Final Amount: Rs {final_amount}")
+    st.info(f"💳 Payment Method: {payment_method}")
 
-        csv = summary.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "📥 Download Yearly Report",
-            csv,
-            "yearly_sales_report.csv",
-            "text/csv"
-        )
+    # --- Receipt Download ---
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "📥 Download Receipt",
+        csv,
+        f"{customer_name}_receipt.csv",
+        "text/csv"
+    )
 
-except FileNotFoundError:
-    st.warning("No sales data available yet")
+
+# --- Generate Bill ---
+if shop_open:
+    if st.button("🧾 Generate Bill"):
+        if not customer_name:
+            st.warning("Please enter customer name")
+        elif not purchases:
+            st.warning("Please select at least one product")
+        else:
+            show_bill(purchases)
