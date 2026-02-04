@@ -130,31 +130,41 @@ with tab1:
             st.success("Invoice Generated Successfully")
             st.balloons()
 
-    # ================= CENTER ALIGNED RECEIPT =================
+    # ================= RESPONSIVE CENTER INVOICE =================
     if st.session_state.invoice:
         inv = st.session_state.invoice
 
-        # CSS for center invoice
+        # RESPONSIVE CSS (Desktop + Mobile)
         st.markdown(
             """
             <style>
+            .invoice-wrapper {
+                display: flex;
+                justify-content: center;
+                width: 100%;
+            }
             .invoice-box {
-                max-width: 420px;
-                margin: auto;
+                width: 100%;
+                max-width: 380px;
                 padding: 15px;
-                border: 1px dashed #888;
+                border: 1px dashed #777;
                 font-family: monospace;
                 text-align: center;
+            }
+            @media (max-width: 600px) {
+                .invoice-box {
+                    max-width: 95%;
+                }
             }
             </style>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown('<div class="invoice-box">', unsafe_allow_html=True)
+        st.markdown('<div class="invoice-wrapper"><div class="invoice-box">', unsafe_allow_html=True)
 
         if st.session_state.shop_logo:
-            st.image(st.session_state.shop_logo, width=100)
+            st.image(st.session_state.shop_logo, width=90)
 
         st.markdown("### 🧾 RECEIPT")
         st.markdown("**Electronic Shop**  \nMain Market, Karachi")
@@ -167,8 +177,7 @@ with tab1:
 
         st.markdown("---")
 
-        receipt_df = pd.DataFrame(inv["Items"])
-        st.table(receipt_df)
+        st.table(pd.DataFrame(inv["Items"]))
 
         st.markdown("---")
         st.write(f"Items Sold: {len(inv['Items'])}")
@@ -176,15 +185,13 @@ with tab1:
         st.write(f"Discount: Rs {inv['Discount']:,.0f}")
         st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
 
-        st.markdown(
-            f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}"
-        )
+        st.markdown(f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}")
 
         st.markdown("---")
         st.write("Thank you for shopping with us")
         st.write("Goods once sold will not be returned")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
 # ================= TAB 2 : INVENTORY =================
 with tab2:
