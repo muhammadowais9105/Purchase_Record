@@ -43,12 +43,21 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🏷️ Shop Settings"
 ])
 
+# ================= TAB 4 : SHOP SETTINGS =================
+with tab4:
+    st.subheader("Upload Shop Logo")
+    logo = st.file_uploader("Upload Logo", type=["png", "jpg", "jpeg"])
+    if logo:
+        st.session_state.shop_logo = logo
+        st.success("Logo uploaded successfully")
+
+    if st.session_state.shop_logo:
+        st.image(st.session_state.shop_logo, width=180)
+
 # ================= TAB 1 : POS =================
 with tab1:
-    # 👉 Inventory ke bahar aate hi logout
-    st.session_state.admin_logged_in = False
-
     st.subheader("Create New Bill")
+
     customer = st.text_input("Customer Name")
 
     available = st.session_state.inventory[
@@ -65,6 +74,7 @@ with tab1:
 
     for item in selected_items:
         row = available[available["Item"] == item].iloc[0]
+
         qty = st.number_input(
             f"Quantity - {item}",
             min_value=1,
@@ -74,6 +84,7 @@ with tab1:
 
         total = qty * row["Price"]
         subtotal += total
+
         purchases.append({
             "Product": item,
             "Qty": qty,
@@ -126,8 +137,10 @@ with tab1:
 # ================= TAB 2 : INVENTORY =================
 with tab2:
     st.subheader("Inventory Manager")
+
     ADMIN_PASSWORD = "admin123"
 
+    # ---------- LOGIN ----------
     if not st.session_state.admin_logged_in:
         with st.form("admin_login"):
             pwd = st.text_input("Enter Admin Password", type="password")
@@ -139,9 +152,11 @@ with tab2:
                     st.success("Access Granted")
                     st.stop()
                 else:
-                    st.error("Incorrect Password")
+                    st.error("Incorrect password")
+
+    # ---------- ADMIN PANEL ----------
     else:
-        st.success("Admin Mode Active")
+        st.info("Admin Mode Active")
 
         with st.expander("➕ Add New Product"):
             name = st.text_input("Product Name")
@@ -153,15 +168,17 @@ with tab2:
                     st.session_state.inventory.loc[
                         len(st.session_state.inventory)
                     ] = [name, price, stock]
-                    st.success("Product Added")
+                    st.success("Product added successfully")
 
-        st.markdown("### Edit Inventory")
+        st.markdown("### 🛠️ Edit Inventory")
 
         for i, row in st.session_state.inventory.iterrows():
             c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
 
             with c1:
-                new_name = st.text_input("Item", row["Item"], key=f"name_{i}")
+                new_name = st.text_input(
+                    "Item", row["Item"], key=f"name_{i}"
+                )
             with c2:
                 new_price = st.number_input(
                     "Price", value=row["Price"], key=f"price_{i}"
@@ -185,9 +202,8 @@ with tab2:
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
-    st.session_state.admin_logged_in = False
-
     st.subheader("Sales Report")
+
     if st.session_state.sales_history:
         df = pd.DataFrame(st.session_state.sales_history)
         st.dataframe(df)
@@ -201,19 +217,6 @@ with tab3:
         )
     else:
         st.info("No sales data yet")
-
-# ================= TAB 4 : SHOP SETTINGS =================
-with tab4:
-    st.session_state.admin_logged_in = False
-
-    st.subheader("Upload Shop Logo")
-    logo = st.file_uploader("Upload Logo", type=["png", "jpg", "jpeg"])
-    if logo:
-        st.session_state.shop_logo = logo
-        st.success("Logo Uploaded")
-
-    if st.session_state.shop_logo:
-        st.image(st.session_state.shop_logo, width=180)
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
