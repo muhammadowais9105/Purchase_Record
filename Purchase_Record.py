@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Electronic Shop: Management System",
     page_icon="⚡",
@@ -19,86 +20,192 @@ if "inventory" not in st.session_state:
 if "sales_history" not in st.session_state:
     st.session_state.sales_history = []
 
+if "invoice" not in st.session_state:
+    st.session_state.invoice = None
+
+if "invoice_no" not in st.session_state:
+    st.session_state.invoice_no = 1000
+
+if "shop_logo" not in st.session_state:
+    st.session_state.shop_logo = None
+
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
-if "show_details" not in st.session_state:
-    st.session_state.show_details = False
-
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
+st.markdown("Manage your stock and generate professional bills")
 
-tab1, tab2, tab3 = st.tabs([
-    "🛒 POS",
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🛒 Point of Sale",
     "📦 Inventory Manager",
-    "📊 Sales Report"
+    "📊 Sales Report",
+    "🏷️ Shop Settings"
 ])
 
-# ================= TAB 2 : INVENTORY =================
+# ================= TAB 4 : SHOP SETTINGS =================
+with tab4:
+    st.subheader("Upload Shop Logo")
+    logo = st.file_uploader("Upload Shop Logo", type=["png", "jpg", "jpeg"])
+    if logo:
+        st.session_state.shop_logo = logo
+        st.success("Logo uploaded")
+
+    if st.session_state.shop_logo:
+        st.image(st.session_state.shop_logo, width=200)
+
+# ================= TAB 1 : POS =================
+with tab1:
+    st.subheader("Create New Bill")
+
+    customer = st.text_input("Customer Name")
+
+    items_available = st.session_state.inventory[
+        st.session_state.inventory["Stock"] > 0
+    ]["Item"].tolist()
+
+    selected_items = st.multiselect("Select Products", items_available)
+
+    subtotal = 0
+    purchases = []
+
+    for item in selected_items:
+        row = st.session_state.inventory[
+            st.session_state.inventory["Item"] == item
+        ].iloc[0]
+
+        qty = st.number_input(
+            f"Quantity for {item}",
+            min_value=1,
+            max_value=int(row["Stock"]),
+            key=f"qty_{item}"
+        )
+
+        total = qty * row["Price"]
+        subtotal += total
+
+        purchases.append({
+            "Product": item,
+            "Qty": qty,
+            "Price": row["Price"],
+            "Total": total
+        })
+
+    if subtotal > 0:
+        discount = 0
+        if subtotal > 50000:
+            discount = subtotal * 0.10
+            st.info("10% Discount Applied")
+
+        after_discount = subtotal - discount
+        gst = after_discount * 0.05
+        grand_total = after_discount + gst
+
+        st.subheader(f"Grand Total: Rs {grand_total:,.0f}")
+
+        if st.button("Confirm Purchase"):
+            for p in purchases:
+                idx = st.session_state.inventory.index[
+                    st.session_state.inventory["Item"] == p["Product"]
+                ][0]
+                st.session_state.inventory.at[idx, "Stock"] -= p["Qty"]
+
+            st.session_state.invoice_no += 1
+            inv_no = f"INV-{st.session_state.invoice_no}"
+
+            st.session_state.sales_history.append({
+                "Invoice": inv_no,
+                "Customer": customer,
+                "Amount": grand_total
+            })
+
+            st.session_state.invoice = {
+                "Invoice": inv_no,
+                "Customer": customer,
+                "Date": datetime.now().strftime("%d-%m-%Y %I:%M %p"),
+                "Items": purchases,
+                "SubTotal": subtotal,
+                "Discount": discount,
+                "GST": gst,
+                "NetTotal": grand_total
+            }
+
+            st.success("Invoice Generated")
+
+# ================= TAB 2 : INVENTORY (FIXED LOGIN) =================
 with tab2:
     st.subheader("Inventory Manager")
-
     ADMIN_PASSWORD = "admin123"
 
-    # ---------- LOGIN ----------
+    # ----- LOGIN -----
     if not st.session_state.admin_logged_in:
+        st.markdown("### 🔐 Admin Login")
+
         with st.form("admin_login"):
-            password = st.text_input(
-                "Enter Admin Password",
-                type="password",
-                key="admin_password"
-            )
+            password = st.text_input("Admin Password", type="password")
             login = st.form_submit_button("Login")
 
             if login:
                 if password == ADMIN_PASSWORD:
                     st.session_state.admin_logged_in = True
-
-                    # 🔥 PASSWORD COMPLETELY REMOVE
-                    del st.session_state["admin_password"]
-
-                    st.success("✅ Login Successful")
+                    st.success("Access Granted")
                     st.experimental_rerun()
                 else:
-                    st.error("❌ Wrong Password")
+                    st.error("Wrong Password")
 
-    # ---------- AFTER LOGIN ----------
+    # ----- AFTER LOGIN -----
     else:
-        st.success("🟢 Admin Logged In")
+        st.markdown("### 📋 Inventory Details")
+        st.info("Admin logged in — password removed")
 
-        # 🔹 DETAILS OPTION (ONLY AFTER LOGIN)
-        if st.button("📂 Open Details"):
-            st.session_state.show_details = True
+        with st.expander("➕ Add New Product"):
+            name = st.text_input("Product Name")
+            price = st.number_input("Price", min_value=0, step=100)
+            stock = st.number_input("Stock", min_value=0, step=1)
 
-        # ---------- DETAILS PANEL ----------
-        if st.session_state.show_details:
-            st.info("🛠️ Inventory Details")
+            if st.button("Add Product"):
+                if name not in st.session_state.inventory["Item"].values:
+                    st.session_state.inventory.loc[
+                        len(st.session_state.inventory)
+                    ] = [name, price, stock]
+                    st.success("Product Added")
+                    st.experimental_rerun()
+                else:
+                    st.error("Item already exists")
 
-            with st.expander("➕ Add New Product"):
-                name = st.text_input("Product Name")
-                price = st.number_input("Price", min_value=0, step=100)
-                stock = st.number_input("Stock", min_value=0, step=1)
+        st.markdown("### 🛠️ Update Inventory")
 
-                if st.button("Add Product"):
-                    if name and name not in st.session_state.inventory["Item"].values:
-                        st.session_state.inventory.loc[len(st.session_state.inventory)] = [
-                            name, price, stock
-                        ]
-                        st.success("Product Added")
-                        st.experimental_rerun()
+        for i, row in st.session_state.inventory.iterrows():
+            c1, c2, c3, c4 = st.columns([3,2,2,1])
 
-            st.markdown("### Current Inventory")
-            st.dataframe(st.session_state.inventory, use_container_width=True)
+            with c1:
+                new_name = st.text_input("Item", row["Item"], key=f"n{i}")
+            with c2:
+                new_price = st.number_input("Price", value=row["Price"], step=100, key=f"p{i}")
+            with c3:
+                new_stock = st.number_input("Stock", value=row["Stock"], step=1, key=f"s{i}")
+            with c4:
+                if st.button("Update", key=f"u{i}"):
+                    st.session_state.inventory.at[i,"Item"] = new_name
+                    st.session_state.inventory.at[i,"Price"] = new_price
+                    st.session_state.inventory.at[i,"Stock"] = new_stock
+                    st.experimental_rerun()
 
-        # ---------- LOGOUT ----------
-        if st.button("Logout Admin"):
+        st.dataframe(st.session_state.inventory, use_container_width=True)
+
+        if st.button("🚪 Logout Admin"):
             st.session_state.admin_logged_in = False
-            st.session_state.show_details = False
             st.experimental_rerun()
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
+    st.subheader("Sales Report")
     if st.session_state.sales_history:
-        st.dataframe(pd.DataFrame(st.session_state.sales_history))
+        df = pd.DataFrame(st.session_state.sales_history)
+        st.table(df)
     else:
-        st.info("No sales data yet")
+        st.info("No sales yet")
+
+# ---------------- FOOTER ----------------
+st.markdown("---")
+st.caption("Electronic Shop Management System")
