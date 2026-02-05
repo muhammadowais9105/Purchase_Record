@@ -34,7 +34,9 @@ if "admin_logged_in" not in st.session_state:
 
 # ---------------- HEADER ----------------
 st.title("🏪 Electronic Shop: Management System")
-st.markdown("Manage your stock and generate professional bills")
+st.markdown(
+    "Manage your stock and generate professional bills with automatic discounts."
+)
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "🛒 Point of Sale",
@@ -46,10 +48,15 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ================= TAB 4 : SHOP SETTINGS =================
 with tab4:
     st.subheader("Upload Shop Logo")
-    logo = st.file_uploader("Upload Shop Logo", type=["png", "jpg", "jpeg"])
+
+    logo = st.file_uploader(
+        "Upload Shop Logo",
+        type=["png", "jpg", "jpeg"]
+    )
+
     if logo:
         st.session_state.shop_logo = logo
-        st.success("Logo uploaded")
+        st.success("Logo uploaded successfully")
 
     if st.session_state.shop_logo:
         st.image(st.session_state.shop_logo, width=200)
@@ -64,7 +71,10 @@ with tab1:
         st.session_state.inventory["Stock"] > 0
     ]["Item"].tolist()
 
-    selected_items = st.multiselect("Select Products", items_available)
+    selected_items = st.multiselect(
+        "Select Products",
+        items_available
+    )
 
     subtotal = 0
     purchases = []
@@ -93,9 +103,10 @@ with tab1:
 
     if subtotal > 0:
         discount = 0
+
         if subtotal > 50000:
             discount = subtotal * 0.10
-            st.info("10% Discount Applied")
+            st.info(f"10% Discount Applied: Rs {discount:,.0f}")
 
         after_discount = subtotal - discount
         gst = after_discount * 0.05
@@ -130,82 +141,173 @@ with tab1:
                 "NetTotal": grand_total
             }
 
-            st.success("Invoice Generated")
+            st.success("Invoice Generated Successfully")
+            st.balloons()
 
-# ================= TAB 2 : INVENTORY (FIXED LOGIN) =================
+    # -------- Invoice Display --------
+    if st.session_state.invoice:
+        inv = st.session_state.invoice
+
+        st.markdown("""
+        <style>
+        .invoice-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+        .invoice-box {
+            width: 100%;
+            max-width: 380px;
+            padding: 15px;
+            border: 1px dashed #777;
+            font-family: monospace;
+            text-align: center;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown(
+            '<div class="invoice-wrapper"><div class="invoice-box">',
+            unsafe_allow_html=True
+        )
+
+        if st.session_state.shop_logo:
+            st.image(st.session_state.shop_logo, width=90)
+
+        st.markdown("### 🧾 RECEIPT")
+        st.markdown("**Electronic Shop**  \nMain Market, Karachi")
+        st.markdown("---")
+
+        st.write(f"Invoice #: {inv['Invoice']}")
+        st.write(f"Date: {inv['Date']}")
+        st.write(f"Customer: {inv['Customer']}")
+        st.write("Payment: Cash")
+
+        st.markdown("---")
+        st.table(pd.DataFrame(inv["Items"]))
+
+        st.markdown("---")
+        st.write(f"Sub Total: Rs {inv['SubTotal']:,.0f}")
+        st.write(f"Discount: Rs {inv['Discount']:,.0f}")
+        st.write(f"GST (5%): Rs {inv['GST']:,.0f}")
+        st.markdown(
+            f"### 💰 NET TOTAL: Rs {inv['NetTotal']:,.0f}"
+        )
+
+        st.markdown("---")
+        st.write("Thank you for shopping with us")
+        st.write("Goods once sold will not be returned")
+
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
+# ================= TAB 2 : INVENTORY =================
 with tab2:
     st.subheader("Inventory Manager")
+
     ADMIN_PASSWORD = "admin123"
 
-    # ----- LOGIN -----
     if not st.session_state.admin_logged_in:
-        st.markdown("### 🔐 Admin Login")
+        password = st.text_input(
+            "Enter Admin Password to manage inventory:",
+            type="password"
+        )
 
-        with st.form("admin_login"):
-            password = st.text_input("Admin Password", type="password")
-            login = st.form_submit_button("Login")
+        if st.button("Login"):
+            if password == ADMIN_PASSWORD:
+                st.session_state.admin_logged_in = True
+                st.success("Access Granted!")
+                st.experimental_rerun()
+            else:
+                st.error("Incorrect password!")
 
-            if login:
-                if password == ADMIN_PASSWORD:
-                    st.session_state.admin_logged_in = True
-                    st.success("Access Granted")
-                    st.experimental_rerun()
-                else:
-                    st.error("Wrong Password")
-
-    # ----- AFTER LOGIN -----
     else:
-        st.markdown("### 📋 Inventory Details")
-        st.info("Admin logged in — password removed")
+        st.info(
+            "You are logged in as Admin. "
+            "You can manage inventory."
+        )
 
-        with st.expander("➕ Add New Product"):
+        with st.expander("Add New Product"):
             name = st.text_input("Product Name")
-            price = st.number_input("Price", min_value=0, step=100)
-            stock = st.number_input("Stock", min_value=0, step=1)
+            price = st.number_input(
+                "Price",
+                min_value=0,
+                step=100
+            )
+            stock = st.number_input(
+                "Stock",
+                min_value=0,
+                step=1
+            )
 
             if st.button("Add Product"):
-                if name not in st.session_state.inventory["Item"].values:
+                if name in st.session_state.inventory["Item"].values:
+                    st.error("Item already exists!")
+                else:
                     st.session_state.inventory.loc[
                         len(st.session_state.inventory)
                     ] = [name, price, stock]
-                    st.success("Product Added")
+                    st.success("Product added")
                     st.experimental_rerun()
-                else:
-                    st.error("Item already exists")
 
-        st.markdown("### 🛠️ Update Inventory")
+        st.markdown("### Current Inventory")
 
         for i, row in st.session_state.inventory.iterrows():
-            c1, c2, c3, c4 = st.columns([3,2,2,1])
+            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
 
             with c1:
-                new_name = st.text_input("Item", row["Item"], key=f"n{i}")
+                new_name = st.text_input(
+                    "Item",
+                    row["Item"],
+                    key=f"name_{i}"
+                )
             with c2:
-                new_price = st.number_input("Price", value=row["Price"], step=100, key=f"p{i}")
+                new_price = st.number_input(
+                    "Price",
+                    value=row["Price"],
+                    step=100,
+                    key=f"price_{i}"
+                )
             with c3:
-                new_stock = st.number_input("Stock", value=row["Stock"], step=1, key=f"s{i}")
+                new_stock = st.number_input(
+                    "Stock",
+                    value=row["Stock"],
+                    step=1,
+                    key=f"stock_{i}"
+                )
             with c4:
-                if st.button("Update", key=f"u{i}"):
-                    st.session_state.inventory.at[i,"Item"] = new_name
-                    st.session_state.inventory.at[i,"Price"] = new_price
-                    st.session_state.inventory.at[i,"Stock"] = new_stock
+                if st.button("Update", key=f"update_{i}"):
+                    st.session_state.inventory.at[i, "Item"] = new_name
+                    st.session_state.inventory.at[i, "Price"] = new_price
+                    st.session_state.inventory.at[i, "Stock"] = new_stock
                     st.experimental_rerun()
 
-        st.dataframe(st.session_state.inventory, use_container_width=True)
+        st.dataframe(
+            st.session_state.inventory,
+            use_container_width=True
+        )
 
-        if st.button("🚪 Logout Admin"):
+        if st.button("Logout Admin"):
             st.session_state.admin_logged_in = False
             st.experimental_rerun()
 
 # ================= TAB 3 : SALES REPORT =================
 with tab3:
     st.subheader("Sales Report")
+
     if st.session_state.sales_history:
         df = pd.DataFrame(st.session_state.sales_history)
         st.table(df)
+
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download CSV",
+            csv,
+            "sales_report.csv",
+            "text/csv"
+        )
     else:
-        st.info("No sales yet")
+        st.info("No sales data yet")
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
-st.caption("Electronic Shop Management System")
+st.caption("Electronic Shop Management System | Streamlit App")
