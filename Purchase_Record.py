@@ -50,6 +50,7 @@ with tab4:
     if logo:
         st.session_state.shop_logo = logo
         st.success("Logo uploaded successfully")
+
     if st.session_state.shop_logo:
         st.image(st.session_state.shop_logo, width=200)
 
@@ -132,7 +133,7 @@ with tab1:
             st.success("Invoice Generated Successfully")
             st.balloons()
 
-# ================= TAB 2 : INVENTORY =================
+# ================= TAB 2 : INVENTORY (ONE CLICK LOGIN FIX) =================
 with tab2:
     st.subheader("Inventory Manager")
 
@@ -140,64 +141,67 @@ with tab2:
 
     # -------- LOGIN --------
     if not st.session_state.admin_logged_in:
-        with st.form("admin_login"):
+        with st.form("admin_login_form"):
             password = st.text_input(
-                "🔐 Admin Password",
-                type="password",
-                placeholder="Enter admin password"
+                "Enter Admin Password to manage inventory:",
+                type="password"
             )
-            login = st.form_submit_button("Login")
+            login_btn = st.form_submit_button("Login")
 
-            if login:
+            if login_btn:
                 if password == ADMIN_PASSWORD:
                     st.session_state.admin_logged_in = True
-                    st.success("✅ Access Granted")
+                    st.success("Access Granted! You can now manage inventory.")
                     st.experimental_rerun()
                 else:
-                    st.error("❌ Incorrect Password")
+                    st.error("Incorrect password! Access denied.")
 
     # -------- AFTER LOGIN --------
     else:
-        st.success("🟢 Admin Logged In")
+        st.info("You are logged in as Admin. You can add new products and adjust stock/price. Renaming allowed.")
 
-        show_details = st.checkbox("📂 Show Details")
+        # -------- Add New Product --------
+        with st.expander("Add New Product"):
+            name = st.text_input("Product Name")
+            price = st.number_input("Price", min_value=0, step=100)
+            stock = st.number_input("Stock", min_value=0, step=1)
 
-        if show_details:
-            st.info("🛠️ Inventory Management Panel")
-
-            with st.expander("➕ Add New Product"):
-                name = st.text_input("Product Name")
-                price = st.number_input("Price", min_value=0, step=100)
-                stock = st.number_input("Stock", min_value=0, step=1)
-
-                if st.button("Add Product"):
-                    if name and name not in st.session_state.inventory["Item"].values:
+            if st.button("Add Product"):
+                if name:
+                    if name in st.session_state.inventory["Item"].values:
+                        st.error(f"Item '{name}' already exists! Cannot add duplicate.")
+                    else:
                         st.session_state.inventory.loc[len(st.session_state.inventory)] = [
                             name, price, stock
                         ]
-                        st.success("Product Added")
-                        st.experimental_rerun()
-                    else:
-                        st.error("Invalid or duplicate product")
-
-            st.markdown("### Edit Inventory")
-            for i, row in st.session_state.inventory.iterrows():
-                c1, c2, c3, c4 = st.columns([3,2,2,1])
-                with c1:
-                    n = st.text_input("Name", row["Item"], key=f"n{i}")
-                with c2:
-                    p = st.number_input("Price", value=row["Price"], step=100, key=f"p{i}")
-                with c3:
-                    s = st.number_input("Stock", value=row["Stock"], step=1, key=f"s{i}")
-                with c4:
-                    if st.button("Update", key=f"u{i}"):
-                        st.session_state.inventory.at[i, "Item"] = n
-                        st.session_state.inventory.at[i, "Price"] = p
-                        st.session_state.inventory.at[i, "Stock"] = s
-                        st.success("Updated")
+                        st.success(f"Product '{name}' added successfully!")
                         st.experimental_rerun()
 
-            st.dataframe(st.session_state.inventory, use_container_width=True)
+        # -------- Editable Inventory --------
+        st.markdown("### Current Inventory")
+        for i, row in st.session_state.inventory.iterrows():
+            col1, col2, col3, col4 = st.columns([3,2,2,1])
+            with col1:
+                new_name = st.text_input(f"Rename Item {i}", row["Item"], key=f"name_{i}")
+            with col2:
+                new_price = st.number_input(
+                    f"Price {i}", min_value=0, step=100,
+                    value=row["Price"], key=f"price_{i}"
+                )
+            with col3:
+                new_stock = st.number_input(
+                    f"Stock {i}", min_value=0, step=1,
+                    value=row["Stock"], key=f"stock_{i}"
+                )
+            with col4:
+                if st.button(f"Update {i}"):
+                    st.session_state.inventory.at[i, "Item"] = new_name
+                    st.session_state.inventory.at[i, "Price"] = new_price
+                    st.session_state.inventory.at[i, "Stock"] = new_stock
+                    st.success(f"Item '{new_name}' updated!")
+                    st.experimental_rerun()
+
+        st.dataframe(st.session_state.inventory, use_container_width=True)
 
         if st.button("Logout Admin"):
             st.session_state.admin_logged_in = False
@@ -224,5 +228,3 @@ with tab3:
 # ---------------- FOOTER ----------------
 st.markdown("---")
 st.caption("Electronic Shop Management System | Streamlit App")
-
-
